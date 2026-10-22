@@ -31,13 +31,49 @@ const UI = {
     document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { Sound.init(); Sound.click(); this.openTab(b.dataset.tab); });
     $('#panelClose').onclick = () => this.closePanel();
     $('#panelBody').addEventListener('click', e => this.panelClick(e));
-    $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') this.closeModal(); });
+    $('#panelBody').addEventListener('toggle', e => { if (e.target.id === 'ownerDet') this._ownerOpen = e.target.open; }, true);
+    $('#modal').addEventListener('click', e => { if (e.target.id === 'modal' && !$('#modal').dataset.locked) this.closeModal(); });
     $('#auto').onclick = () => this.toggleAuto();
     $('#quick').onclick = () => this.toggleQuick();
     Game.on('ach', a => this.toast(a.name, 'Goal complete: +' + fmtN(a.reward) + ' coins', '#ffc83a', true));
     Game.on('biome', id => this.onBiome(id));
     Game.on('potionEnd', () => this.toast('Potion expired', '', '#8c98b0'));
-    this.refreshHud(true); this.refreshEquipped(); this.refreshToggles();
+    $('#cloudPill').onclick = () => { Sound.init(); if (Cloud.user) this.openTab('more'); else Cloud.signIn(); };
+    $('#startSignIn').onclick = () => Cloud.signIn();
+    $('.ownertag').onclick = () => Admin.open();
+    Cloud.onChange(() => this.refreshCloud());
+    this.refreshHud(true); this.refreshEquipped(); this.refreshToggles(); this.refreshCloud(); this.refreshAdminBits();
+    // swipe the sheet down to close it (phones)
+    let sy = null; const ph = $('.phead');
+    ph.addEventListener('touchstart', e => { sy = e.touches[0].clientY; }, { passive: true });
+    ph.addEventListener('touchend', e => { if (sy !== null && e.changedTouches[0].clientY - sy > 50) this.closePanel(); sy = null; });
+  },
+
+  // ---------- cloud + owner bits ----------
+  refreshCloud() {
+    const pill = $('#cloudPill'), t = { off: ['LOCAL', 'off'], out: ['SIGN IN', 'out'], sync: ['SYNC', 'busy'], saving: ['SAVING', 'busy'], saved: ['SAVED', 'ok'], denied: ['SETUP', 'warn'], error: ['RETRY', 'warn'] }[Cloud.status];
+    pill.className = 'stat cloud ' + t[1]; pill.querySelector('b').textContent = t[0];
+    pill.title = Cloud.user ? 'Cloud save: ' + (Cloud.user.email || 'signed in') : 'Tap to sign in and save online';
+    const ss = $('#startSave'); if (ss && Cloud.user) ss.dataset.who = Cloud.user.email || '';
+    const si = $('#startSignIn');
+    if (si) { si.textContent = Cloud.user ? 'Cloud save on: ' + (Cloud.user.email || 'signed in') : 'SIGN IN WITH GOOGLE TO SAVE ONLINE'; si.classList.toggle('on', !!Cloud.user); si.disabled = !!Cloud.user; si.style.display = Cloud.status === 'off' ? 'none' : ''; }
+    if (this.tab === 'more') this.refreshAccount();
+  },
+  // update just the account / owner boxes so open sections and typing are left alone
+  refreshAccount() {
+    const a = $('#acctBox'), o = $('#ownerBox'); if (!a || !o) return;
+    a.innerHTML = this.accountHtml();
+    const key = (!!Cloud.user) + ':' + Cloud.admin;
+    if (key !== this._ownerKey) { this._ownerKey = key; o.innerHTML = this.ownerHtml(); }
+  },
+  refreshAdminBits() {
+    $('.ownertag').classList.toggle('hidden', !Cloud.admin);
+    if (this.tab === 'more') this.refreshAccount();
+  },
+  openDialog(title, body, locked) {
+    this.closeModal(); const m = $('#modal'); m.classList.remove('hidden'); m.dataset.locked = locked ? '1' : '';
+    $('#mbox').style.setProperty('--tc', '#ffc83a');
+    $('#mbox').innerHTML = '<div class="mbody"><h3>' + esc(title) + '</h3>' + body + '</div>';
   },
 
   // ---------- HUD ----------
@@ -175,7 +211,7 @@ const UI = {
   // ---------- panel ----------
   openTab(tab) {
     if (this.tab === tab) { this.closePanel(); return; }
-    this.tab = tab; $('#app').classList.add('open'); $('#panel').classList.remove('closed');
+    this.tab = tab; $('#panelBody').scrollTop = 0; $('#app').classList.add('open'); $('#panel').classList.remove('closed');
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     if (tab === 'bag') this.badge.bag = false;
     ({ bag: () => this.renderBag(true), index: () => this.renderIndex(), shop: () => this.renderShop(), goals: () => this.renderGoals(), more: () => this.renderMore() })[tab]();
@@ -200,6 +236,13 @@ const UI = {
     else if (act === 'sound') { Game.s.settings.sound = Sound.toggle(); Game.save(); this.renderMore(); }
     else if (act === 'export') { const ta = $('#codeBox'); ta.value = Game.exportCode(); ta.select(); try { navigator.clipboard.writeText(ta.value); this.toast('Save code copied', 'Paste it somewhere safe', '#36e6ff'); } catch (x) { } }
     else if (act === 'import') { if (Game.importCode($('#codeBox').value)) { this.toast('Save loaded', '', '#4de28a'); this.refreshEquipped(); this.refreshHud(); this.refreshToggles(); this.renderMore(); } else { Sound.deny(); this.toast('That code did not work', 'Copy the whole thing', '#ff4d6a'); } }
+    else if (act === 'signin') Cloud.signIn();
+    else if (act === 'signout') Cloud.signOut();
+    else if (act === 'savenow') Cloud.saveNow().then(ok => { if (ok) this.toast('Saved to the cloud', '', '#4de28a'); });
+    else if (act === 'loadcloud') Cloud.loadCloudNow();
+    else if (act === 'unlock') Cloud.unlock($('#ownerCode').value).then(() => { Sound.ach(); this.toast('Owner verified', 'Welcome back', '#ffc83a', true); }).catch(e => { Sound.deny(); this.toast('Owner code', e.message, '#ff4d6a'); });
+    else if (act === 'lock') Cloud.lock().then(() => this.toast('Owner mode locked', '', '#8c98b0'));
+    else if (act === 'admin') Admin.open();
     else if (act === 'reset') { if (t.dataset.arm) { Game.reset(); location.reload(); } else { t.dataset.arm = 1; t.textContent = 'TAP AGAIN TO ERASE EVERYTHING'; } }
   },
   setPanel(title, html) { $('#panelTitle').textContent = title; $('#panelBody').innerHTML = html; },
@@ -247,7 +290,7 @@ const UI = {
     $('#mbox').innerHTML = '<canvas id="pv"></canvas><div class="mbody"><h3 class="nmx t-' + i.tier.id + '">' + esc(i.name) + '</h3><div class="lore">' + esc(i.aura.lore) + (i.aura.biome ? ' (Only rolls during ' + BIOMES[i.aura.biome].name + ')' : '') + '</div>' + body + '</div>';
     this.prev = new Preview($('#pv')); this.prev.show(i.aura, i.variant.id);
   },
-  closeModal() { if (this.prev) { this.prev.stop(); this.prev = null; } $('#modal').classList.add('hidden'); },
+  closeModal() { if (this.prev) { this.prev.stop(); this.prev = null; } $('#modal').dataset.locked = ''; $('#modal').classList.add('hidden'); },
 
   // ---- index ----
   renderIndex() {
@@ -292,11 +335,30 @@ const UI = {
   },
 
   // ---- more ----
+  accountHtml() {
+    const u = Cloud.user, st = Cloud.status, who = u ? esc(u.email || u.displayName || 'your account') : '';
+    const line = { off: 'Cannot reach the cloud right now. Your game still saves on this device.', out: 'Sign in with Google and your game saves online by itself. Open it on any phone or computer and pick up where you left off.',
+      sync: 'Checking your cloud save...', saving: 'Saving...', saved: 'Saved online' + (Cloud.savedAt ? ' at ' + new Date(Cloud.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '') + '. It keeps saving by itself.',
+      denied: 'Cloud saving is not switched on yet. Your game still saves on this device.', error: 'Could not save: ' + esc(Cloud.error) }[st];
+    let h = '<div class="sec" style="margin-top:0">Account</div><div class="acct ' + st + '"><div class="who">' + (u ? who : 'Not signed in') + '</div><p class="sub" style="margin:4px 0 10px">' + line + '</p>';
+    h += u ? '<div style="display:flex;gap:8px"><button class="btn" data-act="savenow" style="flex:1">SAVE NOW</button><button class="btn ghost" data-act="loadcloud" style="flex:1">LOAD CLOUD</button><button class="btn ghost" data-act="signout" style="flex:0 0 auto;min-width:0">SIGN OUT</button></div>'
+      : '<button class="btn gold" data-act="signin" style="width:100%"' + (st === 'off' ? ' disabled' : '') + '>SIGN IN WITH GOOGLE</button>';
+    return h + '</div>';
+  },
+  ownerHtml() {
+    const u = Cloud.user, who = u ? esc(u.email || u.displayName || 'your account') : '', open = this._ownerOpen ? ' open' : '';
+    let h = '';
+    if (Cloud.admin) h += '<div class="acct owner"><div class="who"><span class="ownertag static">OWNER</span> Verified' + (u && u.email ? ' as ' + esc(u.email) : '') + '</div><p class="sub" style="margin:4px 0 10px">Confirmed by the server, not just this page.</p><div style="display:flex;gap:8px"><button class="btn gold" data-act="admin" style="flex:1">OPEN ADMIN PANEL</button><button class="btn ghost" data-act="lock" style="flex:0 0 auto;min-width:0">LOCK</button></div></div>';
+    else if (u) h += '<details class="adv" id="ownerDet"' + open + '><summary>Owner access</summary><p class="sub">For the creator. Enter the owner code to prove it is you and unlock the admin tools.</p><div style="display:flex;gap:8px"><input class="search" id="ownerCode" type="password" inputmode="numeric" autocomplete="off" placeholder="Owner code" style="margin:0;flex:1"><button class="btn" data-act="unlock" style="flex:0 0 auto">UNLOCK</button></div></details>';
+    return h;
+  },
   renderMore() {
+    const sc = $('#panelBody').scrollTop;
     const s = Game.s, best = s.best ? info(s.best) : null, eqb = Game.equippedBonus();
     const rows = (a) => a.map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
-    this.setPanel('MORE',
-      '<div class="sec" style="margin-top:0">Your luck</div><div class="kv">' + rows([
+    this._ownerKey = (!!Cloud.user) + ':' + Cloud.admin;
+    this.setPanel('MORE', '<div id="acctBox">' + this.accountHtml() + '</div><div id="ownerBox">' + this.ownerHtml() + '</div>' +
+      '<div class="sec">Your luck</div><div class="kv">' + rows([
         ['Lucky Charm', 'x' + (1 + s.up.luck * .06).toFixed(2)], ['Potion', 'x' + Game.potionMult('luck')], ['Biome (' + BIOMES[Game.biome].name + ')', 'x' + BIOMES[Game.biome].luck],
         ['Equipped aura', 'x' + (1 + eqb).toFixed(2)], ['TOTAL', 'x' + Game.luck().toFixed(2)]]) + '</div>' +
       '<div class="sec">Stats</div><div class="kv">' + rows([
@@ -304,8 +366,9 @@ const UI = {
         ['Coin multiplier', 'x' + Game.coinMult().toFixed(2)], ['Roll cooldown', Game.cooldownSecs().toFixed(2) + 's'], ['Time played', fmtPlay(s.play)]]) + '</div>' +
       '<div class="sec">Variants</div><p class="sub">Any roll can also be a variant: Shiny 1 in 30, Inverted 1 in 300, Void 1 in 3,000. They multiply your coins and their odds stack on top of the aura.</p>' +
       '<div class="sec">Settings</div><div class="row"><div class="info"><div class="t">Sound</div></div><button class="btn' + (Sound.on ? '' : ' ghost') + '" data-act="sound">' + (Sound.on ? 'ON' : 'OFF') + '</button></div>' +
-      '<div class="sec">Save</div><p class="sub">Your game saves on this device automatically. Copy the code to move it to another device.</p><textarea class="code" id="codeBox" placeholder="Paste a save code here to load it"></textarea>' +
-      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-act="export" style="flex:1">COPY CODE</button><button class="btn gold" data-act="import" style="flex:1">LOAD CODE</button></div>' +
+      '<details class="adv"><summary>Backup code (advanced)</summary><p class="sub">Only needed if you do not want to sign in. Copy the code to move your game by hand.</p><textarea class="code" id="codeBox" placeholder="Paste a save code here to load it"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-act="export" style="flex:1">COPY CODE</button><button class="btn gold" data-act="import" style="flex:1">LOAD CODE</button></div></details>' +
       '<div style="margin-top:22px"><button class="btn red" data-act="reset" style="width:100%">RESET GAME</button></div>');
+    $('#panelBody').scrollTop = sc;
   },
 };

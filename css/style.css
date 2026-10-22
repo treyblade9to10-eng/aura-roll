@@ -221,3 +221,69 @@ textarea.code { width: 100%; height: 90px; padding: 8px; background: #060a14; co
   #cine .c1 { --ls: .28em; font-size: 16px; }
 }
 @media (max-height: 520px) and (min-width: 761px) { #rollzone { bottom: 70px; gap: 4px; } #roll { height: 62px; } #reveal { top: 12%; } }
+
+/* ---- v1.1: cloud pill, owner, account ---- */
+.stat.cloud { cursor: pointer; gap: 7px; font-size: 14px; letter-spacing: .08em; padding: 7px 11px; color: var(--dim); }
+.stat.cloud .cd { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); flex: none; }
+.stat.cloud.ok .cd { background: var(--good); box-shadow: 0 0 8px var(--good); } .stat.cloud.ok { color: var(--good); }
+.stat.cloud.busy .cd { background: var(--gold); animation: pulse .6s infinite alternate; } .stat.cloud.busy { color: var(--gold); }
+.stat.cloud.warn .cd { background: var(--bad); } .stat.cloud.warn { color: var(--bad); }
+.stat.cloud.out { color: var(--a1); } .stat.cloud.out .cd { background: var(--a1); }
+.ownertag { align-self: center; margin-left: 4px; padding: 3px 8px 2px; font: 900 italic 13px var(--hd); letter-spacing: .18em; color: #1a1000; background: linear-gradient(180deg, #ffe27a, #f0a21a); box-shadow: 0 0 14px #ffc83a88; pointer-events: auto; transform: skewX(-9deg); }
+.ownertag.static { display: inline-block; margin: 0 6px 0 0; pointer-events: none; }
+.ghostbtn { display: block; margin: 16px auto 0; padding: 12px 22px; border: 1px solid var(--line2); border-radius: 6px; font: 700 13px var(--bd); letter-spacing: .1em; color: #cdd6e8; background: #0a0f1ca0; max-width: 92vw; overflow: hidden; text-overflow: ellipsis; }
+.ghostbtn:hover:not(:disabled) { border-color: var(--a1); color: #fff; }
+.ghostbtn.on { border-color: var(--good); color: var(--good); cursor: default; }
+.acct { padding: 12px; margin-bottom: 10px; background: var(--panel2); border: 1px solid var(--line); border-left: 4px solid var(--dim); border-radius: 6px; }
+.acct.saved { border-left-color: var(--good); } .acct.saving, .acct.sync { border-left-color: var(--gold); } .acct.denied, .acct.error { border-left-color: var(--bad); } .acct.out { border-left-color: var(--a1); }
+.acct.owner { border-left-color: var(--gold); background: linear-gradient(90deg, #ffc83a14, var(--panel2)); }
+.acct .who { font: 800 italic 20px var(--hd); word-break: break-all; }
+details.adv { margin: 12px 0; padding: 10px 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+details.adv summary { cursor: pointer; font: 800 italic 16px var(--hd); letter-spacing: .08em; color: var(--dim); text-transform: uppercase; list-style: none; padding: 4px 0; }
+details.adv summary::-webkit-details-marker { display: none; }
+details.adv[open] summary { margin-bottom: 8px; color: #fff; }
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.cmp > div { padding: 10px; background: var(--panel2); border: 1px solid var(--line); text-align: center; }
+.cmp b { display: block; font: 900 italic 15px var(--hd); letter-spacing: .14em; color: var(--gold); margin-bottom: 4px; }
+.cmp span { display: block; font: 800 italic 20px var(--hd); }
+.mbox.admin .mbody { padding-bottom: 20px; }
+.asec { margin: 14px 0 6px; font: 800 italic 14px var(--hd); letter-spacing: .14em; color: var(--gold); text-transform: uppercase; }
+.arow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; } .arow > span { flex: 1; color: var(--dim); font-size: 14px; }
+.arow .btn { flex: none; } select.search { margin-bottom: 8px; appearance: auto; }
+
+/* ---- phones and touch ---- */
+@media (hover: none) { #rollHint, .rv .eqb small { display: none; } .acard:hover, .btn:hover:not(:disabled) { transform: none; } }
+@media (max-width: 760px) {
+  .stats { gap: 6px; } .stat.cloud { padding: 5px 8px; font-size: 12px; }
+  .ownertag { font-size: 11px; padding: 2px 6px 1px; }
+  .chip { padding: 8px 12px; font-size: 12px; }
+  .btn { min-height: 44px; }
+  .search, textarea.code, select.search { font-size: 16px; }
+  .row { padding: 12px 12px; } .row .btn { min-width: 84px; }
+  .acard { min-height: 88px; }
+  .mbody .acts .btn { flex: 1 1 130px; }
+  #panelBody { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .phead { position: relative; padding-top: 18px; }
+  .phead::before { content: ''; position: absolute; top: 7px; left: 50%; width: 44px; height: 4px; margin-left: -22px; border-radius: 2px; background: #ffffff33; }
+  #panelClose { width: 48px; height: 48px; }
+  .startbox { padding: 16px; } .startbox p { font-size: 16px; }
+  #startBtn { padding: 14px 56px; font-size: 34px; }
+}
+@media (max-width: 380px) { .stat { padding: 4px 7px; font-size: 16px; } .brand { font-size: 22px; } #roll { width: 168px; } .side { width: 48px; } }
+/* phones turned sideways: panel on the right, controls stay reachable */
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  :root { --pw: 46%; }
+  #hud { padding-top: 6px; } .brand { font-size: 22px; } .stat { padding: 4px 8px; font-size: 16px; }
+  #status { top: 40px; } #biomeBadge { font-size: 14px; padding: 4px 10px; } .pot { font-size: 13px; padding: 3px 8px; }
+  #rollzone { bottom: 54px; gap: 4px; } #equipped { font-size: 12px; } #equipped b { font-size: 14px; }
+  #roll { width: 170px; height: 54px; } #rollTxt { font-size: 28px; } .side { width: 48px; padding: 5px 0; }
+  #tabs { bottom: 6px; padding: 3px; } #tabs button { width: 62px; padding: 4px 0 3px; font-size: 10px; } #tabs button .ic { width: 16px; height: 16px; }
+  #reveal { top: 12%; } .rv { padding: 8px 26px 10px; } .rv .rn { font-size: 32px; } .rv .rt { font-size: 12px; } .rv .eqb { margin-top: 6px; padding: 5px 12px; min-height: 0; }
+  #panel { width: var(--pw); bottom: 0; top: 0; height: auto; border-radius: 0; border-top: 0; border-left: 1px solid var(--line2); } #panel.closed { transform: translateX(105%); }
+  .phead::before { display: none; } .phead { padding-top: 8px; }
+  #app.open #tabs { left: calc((100% - var(--pw)) / 2); } #app.open #stagewrap { right: var(--pw); } #app.open #hud, #app.open #reveal { right: var(--pw); } #app.open #rollzone { display: flex; right: var(--pw); }
+  #toasts { top: 70px; } .mbox canvas { height: 150px; } .mbox { max-height: 100%; }
+}
+/* toasts sit at the bottom while a dialog is open so they never cover its buttons */
+#modal:not(.hidden) ~ #toasts { top: max(8px, env(safe-area-inset-top)); bottom: auto; right: 50%; transform: translateX(50%); align-items: center; z-index: 40; }
+#app.open #modal:not(.hidden) ~ #toasts { right: 50%; }

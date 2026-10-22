@@ -39,10 +39,11 @@
       rollBtn.disabled = UI.busy || Game.cooldown > 0;
       if (Game.s.settings.auto && Game.s.up.auto && !UI.busy && Game.cooldown <= 0) UI.roll(true);
       hudT += dt; if (hudT > .25) { hudT = 0; UI.refreshHud(); }
-      saveT += dt; if (saveT > 10) { saveT = 0; Game.save(); }
+      saveT += dt; if (saveT > 10) { saveT = 0; Game.save(true); }
     }
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
-  addEventListener('beforeunload', () => Game.save());
+  addEventListener('beforeunload', () => Game.save(true));
+  Cloud.init();
 })();

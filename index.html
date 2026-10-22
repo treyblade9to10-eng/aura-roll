@@ -8,6 +8,9 @@
 <title>Aura Roll</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-title" content="Aura Roll">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="stylesheet" href="css/style.css">
@@ -17,8 +20,9 @@
   <div id="stagewrap"><canvas id="stage"></canvas></div>
 
   <header id="hud">
-    <div class="brand"><span class="b1">AURA</span><span class="b2">ROLL</span><span class="ver">v1.0</span></div>
+    <div class="brand"><span class="b1">AURA</span><span class="b2">ROLL</span><span class="ver">v1.1</span><button class="ownertag hidden" title="Owner admin panel">OWNER</button></div>
     <div class="stats">
+      <button class="stat cloud out" id="cloudPill" title="Cloud save"><i class="cd"></i><b>SIGN IN</b></button>
       <div class="stat" title="Coins"><svg class="ic"><use href="#i-coin"/></svg><b id="coins">0</b></div>
       <div class="stat" title="Total luck multiplier"><svg class="ic"><use href="#i-luck"/></svg><b id="luck">x1.00</b></div>
       <div class="stat hide-s" title="Total rolls"><svg class="ic"><use href="#i-dice"/></svg><b id="rolls">0</b></div>
@@ -62,6 +66,7 @@
     <div class="logo"><span class="b1">AURA</span><span class="b2">ROLL</span></div>
     <p>Roll for auras. Chase the impossible odds.<br>Equip your best and flex it.</p>
     <button id="startBtn">PLAY</button>
+    <button id="startSignIn" class="ghostbtn">SIGN IN WITH GOOGLE TO SAVE ONLINE</button>
     <small id="startSave"></small>
   </div></div>
 </div>
@@ -87,7 +92,9 @@
 <script src="js/stage.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/game.js"></script>
+<script src="js/cloud.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/admin.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

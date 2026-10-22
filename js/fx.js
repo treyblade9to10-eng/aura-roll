@@ -39,7 +39,7 @@ const FX = (() => {
     ctx.closePath(); ctx.fill();
   }
 
-  const BACK = { glow: 1, rays: 1, void: 1, moon: 1, aurora: 1, galaxy: 1, clock: 1, rift: 1, singularity: 1, prism: 1, halo: 1, voidcore: 1, infinity: 1 };
+  const BACK = { glow: 1, rays: 1, void: 1, moon: 1, aurora: 1, galaxy: 1, clock: 1, rift: 1, singularity: 1, prism: 1, halo: 1, voidcore: 1, infinity: 1, wings: 1, runes: 1 };
 
   const LAYERS = {
     glow(ctx, L, cx, cy, R, dt, t, col) {
@@ -311,6 +311,102 @@ const FX = (() => {
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.05, 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = rgba(col[0], .75); ctx.lineWidth = R * .018; ctx.setLineDash([R * .12, R * .07]); ctx.lineDashOffset = -t * R * .2; ctx.beginPath(); ctx.arc(cx, cy, R * .98, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    },
+    // ---- v1.1 layers ----
+    wings(ctx, L, cx, cy, R, dt, t, col) {
+      const flap = Math.sin(t * 1.7) * .13, n = 7;
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < n; i++) {
+          const u = i / (n - 1), a = -1.25 + u * 1.55 + flap, len = R * (1.05 - u * .42);
+          const sx = cx + side * R * .09, sy = cy - R * .2 + u * R * .12;
+          const tx = sx + side * Math.cos(a + .35) * len * .92, ty = sy + Math.sin(a + .35) * len * .92 + R * .1;
+          const mx = sx + side * Math.cos(a) * len * .55, my = sy + Math.sin(a) * len * .55 - R * .12;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(mx + side * R * .08, my - R * .05, tx, ty); ctx.quadraticCurveTo(mx - side * R * .06, my + R * .12, sx, sy + R * .05);
+          ctx.fillStyle = rgba(col[i % 2 ? 1 : 0], .22 + .08 * (1 - u)); ctx.fill();
+          ctx.strokeStyle = rgba(col[2], .35); ctx.lineWidth = Math.max(1, R * .008); ctx.stroke();
+        }
+      }
+    },
+    vortex(ctx, L, cx, cy, R, dt, t, col) {
+      L.rot = (L.rot || 0) + dt * 2.2;
+      for (let n = emit(L, dt, 120); n--;) L.p.push({ a: L.rot + Math.floor(rnd(0, 3)) * TAU / 3 + rnd(-.22, .22), s: rnd(.018, .04) * R, c: Math.random(), age: 0, life: rnd(1.5, 2.2) });
+      step(L, dt, (q, u) => {
+        const r = R * (1.2 * Math.pow(1 - u, 1.3) + .12), a = q.a + q.age * 3.4 - L.rot * 0;
+        dot(ctx, mix(col[0], col[1], q.c), cx + Math.cos(a) * r, cy + Math.sin(a) * r * .5 + R * .05, q.s * (1.6 - u), Math.sin(Math.min(1, u * 1.4) * Math.PI) * .95);
+      });
+    },
+    runes(ctx, L, cx, cy, R, dt, t, col) {
+      const r = R * .98, y = cy - R * .02;
+      ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1.2, R * .012);
+      ctx.strokeStyle = rgba(col[0], .75); ctx.shadowColor = rgba(col[0], 1); ctx.shadowBlur = R * .08;
+      ctx.beginPath(); ctx.arc(cx, y, r, 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, y, r * .82, 0, TAU); ctx.stroke();
+      ctx.shadowBlur = 0;
+      // rotating glyph ring
+      ctx.strokeStyle = rgba(col[1], .8); ctx.lineWidth = Math.max(1.4, R * .014);
+      for (let i = 0; i < 18; i++) {
+        const a = t * .5 + i * TAU / 18, r1 = r * .86, r2 = r * .95, k = i % 3;
+        ctx.beginPath();
+        if (k === 0) { ctx.moveTo(cx + Math.cos(a) * r1, y + Math.sin(a) * r1); ctx.lineTo(cx + Math.cos(a) * r2, y + Math.sin(a) * r2); }
+        else if (k === 1) { ctx.moveTo(cx + Math.cos(a - .05) * r1, y + Math.sin(a - .05) * r1); ctx.lineTo(cx + Math.cos(a + .05) * r2, y + Math.sin(a + .05) * r2); ctx.moveTo(cx + Math.cos(a + .05) * r1, y + Math.sin(a + .05) * r1); ctx.lineTo(cx + Math.cos(a - .05) * r2, y + Math.sin(a - .05) * r2); }
+        else { ctx.arc(cx, y, (r1 + r2) / 2, a - .06, a + .06); }
+        ctx.stroke();
+      }
+      // counter-rotating star
+      ctx.strokeStyle = rgba(col[2], .6); ctx.lineWidth = Math.max(1, R * .01);
+      ctx.beginPath();
+      for (let i = 0; i <= 5; i++) { const a = -t * .35 + (i * 2 % 5) * TAU / 5; const px = cx + Math.cos(a) * r * .8, py = y + Math.sin(a) * r * .8; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    },
+    comets(ctx, L, cx, cy, R, dt, t, col) {
+      const k = R / 200;
+      for (let n = emit(L, dt, 3.2); n--;) { const x0 = cx + rnd(-.2, 1.5) * R, y0 = cy - R * rnd(1, 1.4); L.p.push({ x: x0, y: y0, vx: -rnd(380, 560) * k, vy: rnd(300, 440) * k, s: rnd(.05, .09) * R, c: Math.random() * 1, age: 0, life: rnd(.8, 1.3) }); }
+      step(L, dt, (q, u) => {
+        q.x += q.vx * dt; q.y += q.vy * dt;
+        const c = mix(col[0], col[2], q.c), tl = .45;
+        const g = ctx.createLinearGradient(q.x, q.y, q.x - q.vx * tl, q.y - q.vy * tl); g.addColorStop(0, rgba(c, .85)); g.addColorStop(1, rgba(c, 0));
+        ctx.strokeStyle = g; ctx.lineWidth = q.s * .9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(q.x, q.y); ctx.lineTo(q.x - q.vx * tl, q.y - q.vy * tl); ctx.stroke(); ctx.lineCap = 'butt';
+        dot(ctx, mix(c, [255, 255, 255], .6), q.x, q.y, q.s * 2.2, 1 - u * .4);
+      });
+    },
+    helix(ctx, L, cx, cy, R, dt, t, col) {
+      const n = 26, h = R * 1.5;
+      for (let i = 0; i < n; i++) {
+        const u = i / (n - 1), y = cy - h / 2 + u * h, ph = u * 7 + t * 2.2, amp = R * .3 * (.6 + .4 * Math.sin(u * Math.PI));
+        const x1 = cx + Math.sin(ph) * amp, x2 = cx - Math.sin(ph) * amp, z1 = Math.cos(ph), z2 = -z1;
+        if (i % 2 === 0) { ctx.strokeStyle = rgba(col[2], .22); ctx.lineWidth = Math.max(1, R * .008); ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke(); }
+        dot(ctx, col[0], x1, y, R * (.05 + .02 * z1), .55 + .4 * z1);
+        dot(ctx, col[1], x2, y, R * (.05 + .02 * z2), .55 + .4 * z2);
+      }
+    },
+    crown(ctx, L, cx, cy, R, dt, t, col) {
+      const u = R / 200, y = cy - 126 * u + Math.sin(t * 2) * 3 * u, w = 36 * u, hh = 26 * u;
+      ctx.beginPath(); ctx.moveTo(cx - w, y + hh);
+      for (let i = 0; i < 5; i++) { const x = cx - w + i * w / 2; ctx.lineTo(x, y); ctx.lineTo(x + w / 4, y + hh * .5); }
+      ctx.lineTo(cx + w, y + hh); ctx.closePath();
+      ctx.fillStyle = rgba(col[0], .4); ctx.fill();
+      ctx.shadowColor = rgba(col[0], 1); ctx.shadowBlur = 14 * u; ctx.strokeStyle = rgba(col[2], .95); ctx.lineWidth = 2.2 * u; ctx.stroke(); ctx.shadowBlur = 0;
+      for (let i = 0; i < 5; i++) dot(ctx, col[2], cx - w + i * w / 2, y, 6 * u + 2 * u * Math.sin(t * 4 + i), .9);
+      dot(ctx, col[1], cx, y - 14 * u, 40 * u, .22 + .1 * Math.sin(t * 3));
+    },
+    fireflies(ctx, L, cx, cy, R, dt, t, col) {
+      if (!L.f) L.f = Array.from({ length: 26 }, () => ({ a: rnd(0, TAU), r: rnd(.3, 1.1), sp: rnd(.2, .7), ph: rnd(0, TAU), y: rnd(-.8, .9) }));
+      for (const q of L.f) {
+        q.a += q.sp * dt * .6;
+        const x = cx + Math.cos(q.a) * R * q.r + Math.sin(t * 1.3 + q.ph) * R * .06, y = cy + q.y * R * .8 + Math.sin(t * 1.7 + q.ph) * R * .07;
+        const b = Math.max(0, Math.sin(t * 2.4 + q.ph * 3)); dot(ctx, mix(col[0], col[1], b), x, y, R * (.025 + .05 * b), .25 + .75 * b);
+      }
+    },
+    slashes(ctx, L, cx, cy, R, dt, t, col) {
+      for (let n = emit(L, dt, 7); n--;) { const a = rnd(-1.3, 1.3) + (Math.random() < .5 ? 0 : Math.PI), r = rnd(.7, 1.4) * R; L.p.push({ x: cx + rnd(-.45, .45) * R * .6, y: cy + rnd(-.4, .4) * R * .7, a, len: r, w: rnd(.05, .1) * R, c: Math.random() < .6 ? 0 : 1, age: 0, life: rnd(.3, .5) }); }
+      step(L, dt, (q, u) => {
+        const e = Math.min(1, u * 3.5), x0 = q.x - Math.cos(q.a) * q.len / 2, y0 = q.y - Math.sin(q.a) * q.len / 2, x1 = x0 + Math.cos(q.a) * q.len * e, y1 = y0 + Math.sin(q.a) * q.len * e;
+        const nx = -Math.sin(q.a) * q.w, ny = Math.cos(q.a) * q.w, f = Math.min(1, (1 - u) * 1.6);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2 + nx, (y0 + y1) / 2 + ny, x1, y1); ctx.quadraticCurveTo((x0 + x1) / 2 - nx * .2, (y0 + y1) / 2 - ny * .2, x0, y0);
+        ctx.fillStyle = rgba(col[q.c], f); ctx.shadowColor = rgba(col[q.c], 1); ctx.shadowBlur = q.w * 1.6; ctx.fill(); ctx.shadowBlur = 0;
+        ctx.strokeStyle = rgba(col[2], f * .9); ctx.lineWidth = Math.max(1, q.w * .12); ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2 + nx * .35, (y0 + y1) / 2 + ny * .35, x1, y1); ctx.stroke();
+      });
     },
   };
 

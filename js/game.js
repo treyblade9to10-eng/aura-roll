@@ -6,7 +6,7 @@ const DAILY_MS = 20 * 3600 * 1000;
 
 function freshState() {
   return {
-    v: 1, coins: 0, rolls: 0, inv: {}, index: {}, variantsSeen: {},
+    v: 2, coins: 0, rolls: 0, inv: {}, index: {}, variantsSeen: {},
     equipped: null,            // 'auraId:variant'
     up: { luck: 0, speed: 0, coins: 0, auto: 0, skip: 0 },
     potions: {},               // id -> count owned
@@ -14,6 +14,7 @@ function freshState() {
     ach: {}, best: null, bestOdds: 0, play: 0, created: Date.now(),
     settings: { sound: true, quick: false, auto: false },
     seen: {},                  // keys revealed at least once (for index NEW badges)
+    admin: { luck: 1, nocd: false, used: false },   // owner tools; only honored while Cloud.admin is true
   };
 }
 
@@ -25,27 +26,37 @@ const Game = {
   on(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); },
   emit(ev, a, b) { (this.listeners[ev] || []).forEach(f => f(a, b)); },
 
-  load() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) { const d = JSON.parse(raw); this.s = Object.assign(freshState(), d); this.s.up = Object.assign(freshState().up, d.up); this.s.settings = Object.assign(freshState().settings, d.settings); }
-    } catch (e) { console.warn('save load failed', e); }
+  setState(d) {
+    const f = freshState();
+    this.s = Object.assign(f, d); this.s.up = Object.assign(freshState().up, d.up); this.s.settings = Object.assign(freshState().settings, d.settings); this.s.admin = Object.assign(freshState().admin, d.admin);
     this.s.active = (this.s.active || []).filter(p => p.left > 0);
+    this.save(true);
   },
-  save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); } catch (e) { } },
+  load() {
+    try { const raw = localStorage.getItem(SAVE_KEY); if (raw) this.setState(JSON.parse(raw)); } catch (e) { console.warn('save load failed', e); }
+  },
+  // quiet = periodic background save (does not count as a change worth sending to the cloud)
+  save(quiet) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.s)); } catch (e) { }
+    if (!quiet) this.emit('changed');
+  },
   exportCode() { return btoa(unescape(encodeURIComponent(JSON.stringify(this.s)))); },
   importCode(code) {
-    try { const d = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); if (typeof d.coins !== 'number' || !d.inv) return false; this.s = Object.assign(freshState(), d); this.save(); return true; } catch (e) { return false; }
+    try { const d = JSON.parse(decodeURIComponent(escape(atob(code.trim())))); if (typeof d.coins !== 'number' || !d.inv) return false; this.setState(d); this.save(); return true; } catch (e) { return false; }
   },
   reset() { this.s = freshState(); this.save(); },
+
+  // ---- owner tools (only work while the signed-in account is verified as the owner) ----
+  isAdmin() { return typeof Cloud !== 'undefined' && Cloud.admin === true; },
+  adminLuck() { return this.isAdmin() ? Math.max(1, this.s.admin.luck || 1) : 1; },
 
   // ---- multipliers ----
   potionMult(kind) { let m = 1; for (const p of this.s.active) if (p.kind === kind) m = Math.max(m, p.mult); return m; },
   equippedAura() { const k = this.s.equipped; return k ? AURA_BY_ID[k.split(':')[0]] : null; },
   equippedBonus() { const a = this.equippedAura(); return a ? Math.log10(a.odds) * 0.04 * (1 + (VARIANT_BY_ID[this.s.equipped.split(':')[1]].mult > 1 ? .5 : 0)) : 0; },
-  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()); },
+  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck(); },
   coinMult() { const a = this.equippedAura(); return (1 + this.s.up.coins * 0.12) * (a ? 1 + Math.log10(a.odds) * 0.05 : 1); },
-  cooldownSecs() { return rollCooldown(this.s.up.speed) / this.potionMult('speed'); },
+  cooldownSecs() { return this.isAdmin() && this.s.admin.nocd ? 0 : rollCooldown(this.s.up.speed) / this.potionMult('speed'); },
 
   // ---- the roll ----
   pickAura(luck, biome) {
@@ -64,6 +75,11 @@ const Game = {
   sellValue(aura, variant) { return Math.max(1, Math.ceil(Math.pow(aura.odds, 0.7) * variant.mult * 1.5)); },
 
   rollNow() {
+    if (this.forced && this.isAdmin()) {
+      const f = this.forced; this.forced = null;
+      const aura = AURA_BY_ID[f.id], variant = VARIANT_BY_ID[f.variant] || VARIANTS[0];
+      if (aura) return { aura, variant, key: aura.id + ':' + variant.id };
+    }
     const luck = this.luck(), aura = this.pickAura(luck, this.biome), variant = this.pickVariant(luck);
     return { aura, variant, key: aura.id + ':' + variant.id };
   },
@@ -84,6 +100,16 @@ const Game = {
   },
   checkAch() {
     for (const a of ACHIEVEMENTS) if (!this.s.ach[a.id] && a.check(this.s)) { this.s.ach[a.id] = Date.now(); this.s.coins += a.reward; this.emit('ach', a); }
+  },
+
+  adminCoins(n) { if (!this.isAdmin()) return; this.s.coins += n; this.s.admin.used = true; this.save(); },
+  adminGive(key, n) {
+    if (!this.isAdmin()) return; const [id, v] = key.split(':'), s = this.s, aura = AURA_BY_ID[id], variant = VARIANT_BY_ID[v]; if (!aura || !variant) return;
+    s.inv[key] = (s.inv[key] || 0) + n; s.seen[key] = 1; s.index[id] = (s.index[id] || 0) + 1;
+    if (v !== 'normal') s.variantsSeen[v] = 1;
+    const eff = aura.odds * variant.chance; if (eff > s.bestOdds) { s.bestOdds = eff; s.best = key; }
+    if (!s.equipped) s.equipped = key;
+    s.admin.used = true; this.checkAch(); this.save();
   },
 
   // ---- inventory ----
