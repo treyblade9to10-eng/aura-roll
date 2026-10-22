@@ -63,7 +63,7 @@ const Admin = {
     if (!list.length) return '<div class="empty">Nobody else has signed in yet.</div>';
     return list.map(([uid, p]) => {
       const on = this.online(p), me = uid === Live.uid, best = p.best && AURA_BY_ID[p.best.split(':')[0]] ? info(p.best).name : 'none yet';
-      return '<button class="prow" data-ad="pick" data-v="' + uid + '"><i class="od ' + (on ? 'on' : '') + '"></i><b>' + esc(p.name || 'Player') + (me ? ' (you)' : '') + '</b><span>' + (p.rolls || 0).toLocaleString() + ' rolls &middot; ' + (p.found || 0) + '/' + AURAS.length + '</span><small>Rarest: ' + esc(best) + ' &middot; ' + (on ? 'online now' : this.ago(p.at)) + '</small></button>';
+      return '<button class="prow" data-ad="pick" data-v="' + uid + '"><i class="odot ' + (on ? 'on' : '') + '"></i><b>' + esc(p.name || 'Player') + (me ? ' (you)' : '') + '</b><span>' + (p.rolls || 0).toLocaleString() + ' rolls &middot; ' + (p.found || 0) + '/' + AURAS.length + '</span><small>Rarest: ' + esc(best) + ' &middot; ' + (on ? 'online now' : this.ago(p.at)) + '</small></button>';
     }).join('');
   },
   sheetHtml(uid) {
