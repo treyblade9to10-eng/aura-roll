@@ -50,6 +50,8 @@ const Admin = {
       '<div class="asec">World</div><div class="arow">' + this.biomeSelect('adBiome', Game.biome) + '<button class="btn" data-ad="biome">SET BIOME</button></div>' +
       '<div class="asec">Quick unlocks</div><div class="arow"><button class="btn" data-ad="potions" style="flex:1">5 OF EACH POTION</button><button class="btn" data-ad="shop" style="flex:1">AUTO + FAST</button></div>' +
       '<div class="arow"><button class="btn" data-ad="all" style="flex:1">UNLOCK EVERY AURA<small>one of each</small></button></div>' +
+      '<div class="asec">Test the new systems</div><div class="arow"><button class="btn" data-ad="mkroll" style="flex:1">NEW MARKET STOCK</button><button class="btn" data-ad="qreset" style="flex:1">NEW QUESTS</button></div>' +
+      '<div class="arow"><button class="btn red" data-ad="rbnow" style="flex:1">REBIRTH NOW<small>ignores the requirement</small></button></div>' +
       '<div class="acts"><button class="btn ghost" data-ad="close">CLOSE</button></div>';
   },
 
@@ -148,6 +150,9 @@ const Admin = {
     else if (k === 'biome') { const id = this.val('adBiome'); a.used = true; Game.setBiome(id); if (id === 'normal') Game.nextBiome = 60; }
     else if (k === 'potions') { for (const p of POTIONS) s.potions[p.id] = (s.potions[p.id] || 0) + 5; a.used = true; Game.save(); Sound.buy(); UI.toast('5 of each potion added', '', '#4de28a'); }
     else if (k === 'shop') { s.up.auto = 1; s.up.skip = 1; a.used = true; Game.save(); UI.refreshToggles(); Sound.buy(); UI.toast('Auto Roll and Fast Reveals unlocked', '', '#4de28a'); }
+    else if (k === 'mkroll') { s.marketBump = (s.marketBump || 0) + 1; a.used = true; Game.save(); Sound.buy(); UI.toast('New market stock', '', '#4de28a'); }
+    else if (k === 'qreset') { s.q = null; Game.ensureQuests(); Game.save(); Sound.buy(); UI.toast('Quests redrawn', '', '#4de28a'); UI.refreshHud(true); }
+    else if (k === 'rbnow') { a.used = true; Game.rebirth(true); UI.closeModal(); UI.closePanel(); UI.rebirthFx(); UI.refreshAll(); }
     else if (k === 'all') { for (const x of AURAS) if (!s.index[x.id]) Game.adminGive(x.id + ':normal', 1); Sound.ach(); UI.toast('Every aura unlocked', '', '#ffc83a'); UI.refreshHud(); }
     UI.refreshHud();
   },

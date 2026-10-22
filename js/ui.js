@@ -21,7 +21,7 @@ function info(key) {
   return { key, aura, variant, tier: aura.tier, eff: aura.odds * variant.chance, name: (variant.name ? variant.name + ' ' : '') + aura.name };
 }
 const tcStyle = a => '--tc:' + a.tier.color + ';--g1:' + a.c[0] + ';';
-const BIOME_COL = { night: '#6a7bff', storm: '#7aa8ff', blizzard: '#9fe8ff', bloodmoon: '#ff3d5e', glitched: '#00ff9d' };
+const BIOME_COL = { night: '#6a7bff', storm: '#7aa8ff', blizzard: '#9fe8ff', bloodmoon: '#ff3d5e', glitched: '#00ff9d', eclipse: '#ff9a2e', rainbow: '#7affc8' };
 
 const UI = {
   stage: null, tab: null, prev: null, busy: false, revealTimer: 0, lastRes: null, bag: { tier: 'all', sort: 'rare', q: '' }, badge: {},
@@ -96,6 +96,9 @@ const UI = {
     if (this.tab === 'shop') this.updateShopButtons();
     $('#tabs [data-tab=bag] .dot')?.remove();
     if (this.badge.bag && this.tab !== 'bag') $('#tabs [data-tab=bag]').insertAdjacentHTML('beforeend', '<i class="dot"></i>');
+    $('#tabs [data-tab=goals] .dot')?.remove();
+    const q = Game.ensureQuests(); if (this.tab !== 'goals' && (q.list.some(x => x.have >= x.need && !x.claimed) || (q.list.every(x => x.claimed) && !q.bonus))) $('#tabs [data-tab=goals]').insertAdjacentHTML('beforeend', '<i class="dot"></i>');
+    const rb = $('.rbtag'); if (rb) { rb.textContent = s.rebirths ? 'R' + s.rebirths : ''; rb.classList.toggle('hidden', !s.rebirths); }
   },
   refreshEquipped() {
     const k = Game.s.equipped, e = $('#equipped');
@@ -190,7 +193,7 @@ const UI = {
       '<div class="rt">' + i.tier.name.toUpperCase() + '</div>' +
       '<div class="rn nmx t-' + i.tier.id + '">' + esc(i.aura.name) + '</div>' +
       '<div class="ro">' + fmtOdds(i.aura.odds) + (v.id !== 'normal' ? ' &middot; with variant ' + fmtOdds(res.eff) : '') + '</div>' +
-      '<div class="rx">' + (v.id !== 'normal' ? '<span class="vtag">' + v.name + '</span>' : '') + (res.isNew ? '<span class="newtag">NEW</span>' : '') + '<span>+' + fmtN(res.coins) + ' coins</span></div>' +
+      '<div class="rx">' + (v.id !== 'normal' ? '<span class="vtag">' + v.name + '</span>' : '') + (res.isNew ? '<span class="newtag">NEW</span>' : '') + (res.fused ? '<span class="vtag" style="background:#36e6ff">FUSED</span>' : '<span>+' + fmtN(res.coins) + ' coins</span>') + '</div>' +
       (equipped ? '' : '<button class="btn eqb" id="eqBtn">EQUIP <small>E</small></button>') + '</div>';
     const b = $('#eqBtn'); if (b) b.onclick = () => this.equipLast();
     clearTimeout(this.revealTimer); this.revealTimer = setTimeout(() => this.hideReveal(), 5200);
@@ -220,7 +223,7 @@ const UI = {
     this.tab = tab; $('#panelBody').scrollTop = 0; $('#app').classList.add('open'); $('#panel').classList.remove('closed');
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     if (tab === 'bag') this.badge.bag = false;
-    ({ bag: () => this.renderBag(true), index: () => this.renderIndex(), shop: () => this.renderShop(), goals: () => this.renderGoals(), more: () => this.renderMore() })[tab]();
+    ({ bag: () => this.renderBag(true), index: () => this.renderIndex(), shop: () => this.renderShop(), goals: () => this.renderGoals(), trade: () => this.renderTrade(), more: () => this.renderMore() })[tab]();
     this.refreshHud();
   },
   closePanel() {
@@ -231,6 +234,7 @@ const UI = {
     const t = e.target.closest('[data-act]'); if (!t) return;
     const act = t.dataset.act, v = t.dataset.v;
     Sound.init();
+    if (this.extraAct && this.extraAct(act, v, t)) return;
     if (act === 'card') this.openDetail(v);
     else if (act === 'idx') this.openAuraView(v);
     else if (act === 'tier') { this.bag.tier = v; this.renderBag(true); }
@@ -272,7 +276,7 @@ const UI = {
       return '<button class="acard' + (s.equipped === i.key ? ' eq' : '') + '" data-act="card" data-v="' + i.key + '" style="' + tcStyle(i.aura) + '--vc:' + (v.color || '#fff') + '">' +
         (s.equipped === i.key ? '<span class="eqt">EQUIPPED</span>' : '') +
         '<div class="nm nmx t-' + i.tier.id + '">' + esc(i.aura.name) + '</div><div class="od">' + fmtOdds(i.aura.odds) + '</div>' +
-        (v.id !== 'normal' ? '<span class="vt">' + v.name + '</span>' : '') + (i.aura.biome ? '<div class="bt">' + BIOMES[i.aura.biome].name + ' only</div>' : '') +
+        (v.id !== 'normal' ? '<span class="vt">' + v.name + '</span>' : '') + (auraLock(i.aura) ? '<div class="bt">' + auraLock(i.aura) + '</div>' : '') +
         '<span class="ct">x' + s.inv[i.key].toLocaleString() + '</span></button>';
     }).join('') : '<div class="empty" style="grid-column:1/-1">' + (Object.keys(s.inv).length ? 'Nothing matches that filter.' : 'Your bag is empty. Hit ROLL!') + '</div>';
   },
@@ -282,7 +286,9 @@ const UI = {
     this.openModal(i, '<div class="kv"><span>Rarity</span><span>' + i.tier.name + '</span><span>Odds</span><span>' + fmtOdds(i.aura.odds) + '</span>' +
       (i.variant.id !== 'normal' ? '<span>With variant</span><span>' + fmtOdds(i.eff) + '</span>' : '') +
       '<span>Owned</span><span>x' + n.toLocaleString() + '</span><span>Luck while equipped</span><span>+' + (lb * 100).toFixed(1) + '%</span><span>Coin bonus while equipped</span><span>+' + (cb * 100).toFixed(1) + '%</span><span>Coins per roll as this</span><span>' + fmtN(Game.coinsFor(i.aura, i.variant)) + '</span><span>Sell value (each extra)</span><span>' + fmtN(sell) + '</span></div>' +
-      '<div class="acts"><button class="btn" id="mEq"' + (eq ? ' disabled' : '') + '>' + (eq ? 'EQUIPPED' : 'EQUIP') + '</button>' + (n > 1 ? '<button class="btn gold" id="mSell">SELL ' + (n - 1) + ' EXTRA<small>+' + fmtN(sell * (n - 1)) + ' coins</small></button>' : '') + (tierIndex(i.eff) >= 5 ? '<button class="btn ghost" id="mCine">WATCH CUTSCENE</button>' : '') + '<button class="btn ghost" id="mClose">CLOSE</button></div>');
+      '<div class="acts"><button class="btn" id="mEq"' + (eq ? ' disabled' : '') + '>' + (eq ? 'EQUIPPED' : 'EQUIP') + '</button>' + (n > 1 ? '<button class="btn gold" id="mSell">SELL ' + (n - 1) + ' EXTRA<small>+' + fmtN(sell * (n - 1)) + ' coins</small></button>' : '') + (tierIndex(i.eff) >= 5 ? '<button class="btn ghost" id="mCine">WATCH CUTSCENE</button>' : '') + (Game.canFuse(key) ? '<button class="btn" id="mFuse">FUSE x' + FUSE_COST + '<small>into a rarer aura</small></button>' : '') + '<button class="btn ghost" id="mFlex">FLEX CARD</button><button class="btn ghost" id="mClose">CLOSE</button></div>');
+    const mf = $('#mFuse'); if (mf) mf.onclick = () => this.doFuse(key);
+    $('#mFlex').onclick = () => Flex.open(key);
     const mc = $('#mCine'); if (mc) mc.onclick = () => this.replayCine(key);
     $('#mEq').onclick = () => { Game.equip(key); Sound.click(); this.refreshEquipped(); this.refreshHud(); if (this.tab === 'bag') this.renderBag(); this.closeModal(); };
     const sb = $('#mSell'); if (sb) sb.onclick = () => { const g = Game.sellExtras(key); Sound.coin(); this.toast('Sold for ' + fmtN(g) + ' coins', '', '#ffc83a'); this.refreshHud(); if (this.tab === 'bag') this.renderBag(); this.closeModal(); };
@@ -295,7 +301,7 @@ const UI = {
   openModal(i, body) {
     this.closeModal(); const m = $('#modal'); m.classList.remove('hidden');
     $('#mbox').style.setProperty('--tc', i.tier.color);
-    $('#mbox').innerHTML = '<canvas id="pv"></canvas><div class="mbody"><h3 class="nmx t-' + i.tier.id + '">' + esc(i.name) + '</h3><div class="lore">' + esc(i.aura.lore) + (i.aura.biome ? ' (Only rolls during ' + BIOMES[i.aura.biome].name + ')' : '') + '</div>' + body + '</div>';
+    $('#mbox').innerHTML = '<canvas id="pv"></canvas><div class="mbody"><h3 class="nmx t-' + i.tier.id + '">' + esc(i.name) + '</h3><div class="lore">' + esc(i.aura.lore) + (i.aura.biome ? ' (Only rolls during ' + BIOMES[i.aura.biome].name + ')' : i.aura.rb ? ' (Unlocked by Rebirth ' + i.aura.rb + ')' : i.aura.hours ? ' (Only rolls at night, 10 PM to 5 AM your time)' : '') + '</div>' + body + '</div>';
     this.prev = new Preview($('#pv')); this.prev.show(i.aura, i.variant.id);
   },
   closeModal() { if (this.prev) { this.prev.stop(); this.prev = null; } $('#modal').dataset.locked = ''; $('#modal').classList.add('hidden'); },
@@ -308,13 +314,14 @@ const UI = {
       if (a.tier.id !== last) { if (last) html += '</div>'; last = a.tier.id; html += '<div class="sec" style="color:' + a.tier.color + '">' + a.tier.name + '</div><div class="grid">'; }
       const got = !!s.index[a.id];
       html += '<button class="acard' + (got ? '' : ' unk') + '" ' + (got ? 'data-act="idx" data-v="' + a.id + '"' : '') + ' style="' + tcStyle(a) + '">' +
-        '<div class="nm nmx t-' + a.tier.id + '">' + (got ? esc(a.name) : '???') + '</div><div class="od">' + fmtOdds(a.odds) + '</div>' + (a.biome ? '<div class="bt">' + BIOMES[a.biome].name + ' only</div>' : '') + (got ? '<span class="ct">x' + s.index[a.id].toLocaleString() + '</span>' : '') + '</button>';
+        '<div class="nm nmx t-' + a.tier.id + '">' + (got ? esc(a.name) : '???') + '</div><div class="od">' + fmtOdds(a.odds) + '</div>' + (auraLock(a) ? '<div class="bt">' + auraLock(a) + '</div>' : '') + (got ? '<span class="ct">x' + s.index[a.id].toLocaleString() + '</span>' : '') + '</button>';
     }
     this.setPanel('INDEX', html + '</div>');
   },
 
   // ---- shop ----
   renderShop() {
+    if (this.shopTab === 'market') return this.renderMarket();
     const s = Game.s, sc = $('#panelBody').scrollTop;
     const left = DAILY_MS - (Date.now() - (s.daily || 0)), ready = left <= 0;
     let h = '<div class="row" style="--rc:var(--gold)"><div class="info"><div class="t" style="color:var(--gold)">Daily Gift</div><div class="d">A Luck Potion plus coins. Comes back every 20 hours.</div>' + (ready ? '' : '<div class="v">Ready in ' + Math.ceil(left / 3600000) + 'h</div>') + '</div><button class="btn gold" data-act="daily"' + (ready ? '' : ' disabled') + '>CLAIM</button></div><div class="sec">Upgrades</div>';
@@ -330,16 +337,20 @@ const UI = {
         '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn gold" data-act="buyp" data-v="' + p.id + '" data-cost="' + p.cost + '"' + (s.coins < p.cost ? ' disabled' : '') + '>BUY<small>' + fmtN(p.cost) + '</small></button>' +
         '<button class="btn" data-act="usep" data-v="' + p.id + '"' + (own ? '' : ' disabled') + '>USE</button></div></div>';
     }
-    this.setPanel('SHOP', h); $('#panelBody').scrollTop = sc;
+    const ownM = MARKET_POTIONS.filter(p => (s.potions[p.id] || 0) > 0);
+    if (ownM.length) { h += '<div class="sec">Market potions you own</div>' + ownM.map(p => '<div class="row" style="--rc:' + p.color + '"><div class="info"><div class="t" style="color:' + p.color + '">' + p.name + '</div><div class="d">' + p.desc + '</div><div class="v">Owned: ' + s.potions[p.id] + '</div></div><button class="btn" data-act="usep" data-v="' + p.id + '">USE</button></div>').join(''); }
+    this.setPanel('SHOP', this.subTabs('shop', [['shop', 'SHOP'], ['market', 'MARKET']]) + h); $('#panelBody').scrollTop = sc;
   },
   updateShopButtons() { const c = Game.s.coins; document.querySelectorAll('#panelBody [data-cost]').forEach(b => b.disabled = c < +b.dataset.cost); },
 
   // ---- goals ----
   renderGoals() {
+    if (this.goalsTab === 'quests' || !this.goalsTab) return this.renderQuests();
+    if (this.goalsTab === 'ranks') return this.renderRanks();
     const s = Game.s, done = ACHIEVEMENTS.filter(a => s.ach[a.id]).length;
     let h = '<div class="prog"><div class="bar"><i style="width:' + (done / ACHIEVEMENTS.length * 100) + '%"></i></div><small><span>GOALS</span><span>' + done + ' / ' + ACHIEVEMENTS.length + '</span></small></div>';
     h += ACHIEVEMENTS.slice().sort((a, b) => !!s.ach[a.id] - !!s.ach[b.id]).map(a => '<div class="row' + (s.ach[a.id] ? ' done' : '') + '"><div class="info"><div class="t">' + a.name + '</div><div class="d">' + a.desc + '</div></div><div class="v" style="color:var(--gold);white-space:nowrap">+' + fmtN(a.reward) + '</div></div>').join('');
-    this.setPanel('GOALS', h);
+    this.setPanel('GOALS', this.subTabs('goals', [['quests', 'QUESTS'], ['goals', 'GOALS'], ['ranks', 'RANKS']]) + h);
   },
 
   // ---- more ----
@@ -365,7 +376,7 @@ const UI = {
     const s = Game.s, best = s.best ? info(s.best) : null, eqb = Game.equippedBonus();
     const rows = (a) => a.map(([k, v]) => '<span>' + k + '</span><span>' + v + '</span>').join('');
     this._ownerKey = (!!Cloud.user) + ':' + Cloud.admin;
-    this.setPanel('MORE', '<div id="acctBox">' + this.accountHtml() + '</div><div id="ownerBox">' + this.ownerHtml() + '</div>' +
+    this.setPanel('MORE', '<div id="acctBox">' + this.accountHtml() + '</div><div id="ownerBox">' + this.ownerHtml() + '</div>' + this.rebirthHtml() +
       '<div class="sec">Your luck</div><div class="kv">' + rows([
         ['Lucky Charm', 'x' + (1 + s.up.luck * .06).toFixed(2)], ['Potion', 'x' + Game.potionMult('luck')], ['Biome (' + BIOMES[Game.biome].name + ')', 'x' + BIOMES[Game.biome].luck],
         ['Equipped aura', 'x' + (1 + eqb).toFixed(2)], ['TOTAL', 'x' + Game.luck().toFixed(2)]]) + '</div>' +

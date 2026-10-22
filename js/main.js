@@ -24,7 +24,7 @@
       else if (e.code === 'KeyQ') UI.toggleQuick();
       else if (e.code === 'KeyE') UI.equipLast();
       else if (e.code === 'Escape') { if (!$('#modal').classList.contains('hidden')) UI.closeModal(); else UI.closePanel(); }
-      else if (/^Digit[1-5]$/.test(e.code)) UI.openTab(['bag', 'index', 'shop', 'goals', 'more'][+e.code[5] - 1]);
+      else if (/^Digit[1-6]$/.test(e.code)) UI.openTab(['bag', 'index', 'shop', 'goals', 'trade', 'more'][+e.code[5] - 1]);
     }
   });
 

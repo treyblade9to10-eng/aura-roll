@@ -12,8 +12,12 @@ function freshState() {
     potions: {},               // id -> count owned
     active: [],                // [{id, kind, mult, left}]
     ach: {}, best: null, bestOdds: 0, play: 0, created: Date.now(),
-    settings: { sound: true, quick: false, auto: false, cine: 'full' },
+    settings: { sound: true, quick: false, auto: false, cine: 'full', board: false },
     seen: {},                  // keys revealed at least once (for index NEW badges)
+    rebirths: 0, rbBest: 0,    // rebirth count, and the rarest roll since the last rebirth
+    q: null, streak: { last: 0, n: 0 },   // daily quests + streak
+    market: { key: '', bought: {} }, marketBump: 0,
+    tradesDone: [],
     forcedNext: null,          // set by the owner (live command): the next roll is this aura
     evSeen: [],                // ids of one-time server events already applied
     admin: { luck: 1, nocd: false, used: false },   // owner tools; only honored while Cloud.admin is true
@@ -57,20 +61,20 @@ const Game = {
   potionMult(kind) { let m = 1; for (const p of this.s.active) if (p.kind === kind) m = Math.max(m, p.mult); return m; },
   equippedAura() { const k = this.s.equipped; return k ? AURA_BY_ID[k.split(':')[0]] : null; },
   equippedBonus() { const a = this.equippedAura(); return a ? Math.log10(a.odds) * 0.04 * (1 + (VARIANT_BY_ID[this.s.equipped.split(':')[1]].mult > 1 ? .5 : 0)) : 0; },
-  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck() * this.eventLuck(); },
-  coinMult() { const a = this.equippedAura(); return (1 + this.s.up.coins * 0.12) * (a ? 1 + Math.log10(a.odds) * 0.05 : 1); },
+  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck() * this.eventLuck() * (1 + REBIRTH.luckPer * this.s.rebirths); },
+  coinMult() { const a = this.equippedAura(); return (1 + this.s.up.coins * 0.12) * (a ? 1 + Math.log10(a.odds) * 0.05 : 1) * (1 + REBIRTH.coinPer * this.s.rebirths) * this.potionMult('coins'); },
   cooldownSecs() { return this.isAdmin() && this.s.admin.nocd ? 0 : rollCooldown(this.s.up.speed) / this.potionMult('speed'); },
 
   // ---- the roll ----
   pickAura(luck, biome) {
     // check from rarest to most common; each aura wins with chance luck/odds
-    const pool = AURAS.filter(a => !a.biome || a.biome === biome).sort((x, y) => y.odds - x.odds);
+    const rb = this.s.rebirths || 0, pool = AURAS.filter(a => (!a.biome || a.biome === biome) && (!a.rb || a.rb <= rb) && (!a.hours || inHours(a.hours))).sort((x, y) => y.odds - x.odds);
     for (const a of pool) if (Math.random() < Math.min(1, luck / a.odds)) return a;
     return AURA_BY_ID.faint;
   },
   pickVariant(luck) {
     // luck helps a little with variants (square-rooted so it can't get silly)
-    const l = Math.sqrt(luck);
+    const l = Math.sqrt(luck) * this.potionMult('variant');
     for (let i = VARIANTS.length - 1; i > 0; i--) if (Math.random() < Math.min(1, l / VARIANTS[i].chance)) return VARIANTS[i];
     return VARIANTS[0];
   },
@@ -97,6 +101,7 @@ const Game = {
     if (variant.id !== 'normal') s.variantsSeen[variant.id] = 1;
     const eff = aura.odds * variant.chance;
     if (eff > s.bestOdds) { s.bestOdds = eff; s.best = key; }
+    if (eff > (s.rbBest || 0)) s.rbBest = eff;
     res.coins = coins; res.isNew = isNew; res.isNewVariant = isNewVariant; res.eff = eff;
     if (!s.equipped) s.equipped = key;
     this.checkAch();
@@ -131,7 +136,7 @@ const Game = {
   sellExtras(key) {
     const n = (this.s.inv[key] || 0) - 1; if (n <= 0) return 0;
     const [id, v] = key.split(':'), total = n * this.sellValue(AURA_BY_ID[id], VARIANT_BY_ID[v]);
-    this.s.inv[key] = 1; this.s.coins += total; this.save(); return total;
+    this.s.inv[key] = 1; this.s.coins += total; this.save(); this.emit('sold', n); return total;
   },
 
   // ---- shop ----
@@ -140,10 +145,11 @@ const Game = {
   buyPotion(id) { const p = POTIONS.find(x => x.id === id); if (this.s.coins < p.cost) return false; this.s.coins -= p.cost; this.s.potions[id] = (this.s.potions[id] || 0) + 1; this.save(); return true; },
   usePotion(id) {
     if (!(this.s.potions[id] > 0)) return false;
-    const p = POTIONS.find(x => x.id === id), cur = this.s.active.find(a => a.id === id);
+    const p = POTION_BY_ID[id], cur = this.s.active.find(a => a.id === id);
     this.s.potions[id]--;
-    if (cur) cur.left += p.secs; else this.s.active.push({ id, kind: p.kind, mult: p.mult, left: p.secs });
-    this.save(); return true;
+    if (p.kind === 'beacon') { const pool = ['bloodmoon', 'eclipse', 'glitched', 'rainbow']; this.setBiome(pool[Math.floor(Math.random() * pool.length)]); }
+    else if (cur) cur.left += p.secs; else this.s.active.push({ id, name: p.name, kind: p.kind, mult: p.mult, left: p.secs });
+    this.save(); this.emit('potion', id); return true;
   },
 
   claimDaily() {
@@ -161,8 +167,9 @@ const Game = {
     if (this.biome === 'normal') {
       this.nextBiome -= dt;
       if (this.nextBiome <= 0) {
-        const opts = Object.values(BIOMES).filter(b => b.weight), tot = opts.reduce((a, b) => a + b.weight, 0); let r = Math.random() * tot, pick = opts[0];
-        for (const b of opts) { r -= b.weight; if (r <= 0) { pick = b; break; } }
+        const wt = b => b.weight * (b.id === 'night' && inHours([22, 5]) ? 3 : 1);
+        const opts = Object.values(BIOMES).filter(b => b.weight), tot = opts.reduce((a, b) => a + wt(b), 0); let r = Math.random() * tot, pick = opts[0];
+        for (const b of opts) { r -= wt(b); if (r <= 0) { pick = b; break; } }
         this.setBiome(pick.id);
       }
     } else {

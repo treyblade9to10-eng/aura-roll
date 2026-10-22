@@ -115,6 +115,20 @@ const AURAS = [
   { id: 'thundergod', name: 'Thunder God', odds: 1500000, biome: 'storm',     c: ['#fff27a', '#5a8aff', '#ffffff'], layers: ['lightning', 'rain', 'vortex', 'rings'], lore: 'The storm kneels.' },
   { id: 'vampire',   name: 'Nightbloom',   odds: 3500000, biome: 'bloodmoon', c: ['#ff2a4a', '#2a0010', '#ffc0c8'], layers: ['wings', 'moon', 'wisps', 'eye'],      lore: 'It blooms when the moon bleeds.' },
   { id: 'segfault',  name: 'Segfault',     odds: 1337000, biome: 'glitched',  c: ['#00ff9d', '#ff0055', '#ffffff'], layers: ['glitch', 'slashes', 'rift'],          lore: 'Core dumped. Vibes intact.' },
+  // ---- v1.4: new weather exclusives
+  { id: 'umbra',      name: 'Umbra',          odds: 150000,   biome: 'eclipse', c: ['#ff9a2e', '#2a0a3a', '#ffe6b0'], layers: ['moon', 'rays', 'halo'],                    lore: 'The shadow of the sun, worn like a cloak.' },
+  { id: 'totality',   name: 'Totality',       odds: 3500000,  biome: 'eclipse', c: ['#fff1c0', '#ff7a1a', '#6a2aff'], layers: ['moon', 'rays', 'halo', 'stars', 'wisps'],  lore: 'Four minutes of perfect darkness. Then you.' },
+  { id: 'spectrum',   name: 'Spectrum',       odds: 20000,    biome: 'rainbow', c: ['#ff4d4d', '#4dff88', '#4d7dff'], layers: ['prism', 'glow', 'sparkle'],                lore: 'Every color, right after the rain.' },
+  { id: 'prismarch',  name: 'Prism Arch',     odds: 900000,   biome: 'rainbow', c: ['#ff7ae0', '#7affc8', '#ffe47a'], layers: ['prism', 'rings', 'orbit', 'stars'],        lore: 'Walk under it and make a wish.' },
+  // ---- real-time night: only roll while it is actually night where you are (10 PM to 5 AM)
+  { id: 'insomniac',  name: 'Insomniac',      odds: 7777,     hours: [22, 5],  c: ['#7a8cff', '#1a1f5c', '#ffe28a'], layers: ['glow', 'stars', 'clock'],                  lore: 'Why are you still awake? Same.' },
+  { id: 'witching',   name: 'Witching Hour',  odds: 777777,   hours: [22, 5],  c: ['#b84dff', '#1a0030', '#ff9aff'], layers: ['runes', 'moon', 'wisps', 'eye'],           lore: 'It only answers after the clock strikes late.' },
+  // ---- rebirth-only: unlocked by rebirthing, the number is how many rebirths you need
+  { id: 'reborn',     name: 'Reborn',         odds: 3000,     rb: 1, c: ['#ffb84d', '#ff5a2a', '#fff0c0'], layers: ['embers', 'glow', 'rings'],                         lore: 'Ash is just the beginning.' },
+  { id: 'ascendant',  name: 'Ascendant',      odds: 400000,   rb: 1, c: ['#fff0a0', '#ffd24a', '#ffffff'], layers: ['rays', 'halo', 'wings', 'sparkle'],                lore: 'Up. Always up.' },
+  { id: 'cycle',      name: 'Eternal Cycle',  odds: 12000000, rb: 2, c: ['#5affc8', '#a45bff', '#ffffff'], layers: ['infinity', 'vortex', 'runes'],                     lore: 'End. Begin. End. Begin.' },
+  { id: 'ouroboros',  name: 'Ouroboros',      odds: 150000000, rb: 3, c: ['#2fe08f', '#ffd24a', '#ffffff'], layers: ['serpent', 'serpent', 'rings', 'halo', 'stars'],  lore: 'It eats its own tail and grins.' },
+  { id: 'afterlife',  name: 'Afterlife',      odds: 3000000000, rb: 5, c: ['#ffffff', '#8a3dff', '#27f0e0'], layers: ['halo', 'wings', 'galaxy', 'singularity', 'crown'], lore: 'You did this five times. Seek help. And enjoy the view.' },
 ];
 const AURA_BY_ID = {};
 AURAS.forEach(a => { a.tier = tierOf(a.odds); AURA_BY_ID[a.id] = a; });
@@ -135,6 +149,8 @@ const BIOMES = {
   storm:     { id: 'storm',     name: 'Storm',      luck: 1.5,  weight: 22,  dur: [60, 100],  sky: ['#0c1220', '#1b2540', '#2a3558'], fx: 'rain',  desc: 'x1.5 luck. Stormborn and Tempest can roll.' },
   blizzard:  { id: 'blizzard',  name: 'Blizzard',   luck: 1.5,  weight: 22,  dur: [60, 100],  sky: ['#1a2a3c', '#34506b', '#6a8aa6'], fx: 'snow',  desc: 'x1.5 luck. Permafrost and Absolute Zero can roll.' },
   bloodmoon: { id: 'bloodmoon', name: 'Blood Moon', luck: 2,    weight: 6,   dur: [45, 70],   sky: ['#1a0206', '#3a0614', '#6a0f24'], fx: 'ash',   desc: 'x2 luck. RARE. Crimson Moon can roll.' },
+  eclipse:   { id: 'eclipse',   name: 'Eclipse',    luck: 2.5,  weight: 3,   dur: [40, 60],   sky: ['#05020a', '#12081c', '#2a1030'], fx: 'none',  desc: 'x2.5 luck. VERY RARE. Umbra and Totality can roll.' },
+  rainbow:   { id: 'rainbow',   name: 'Rainbow',    luck: 2,    weight: 8,   dur: [50, 80],   sky: ['#16305a', '#3a6aa8', '#9ac8e8'], fx: 'none',  desc: 'x2 luck. Spectrum and Prism Arch can roll.' },
   glitched:  { id: 'glitched',  name: 'GLITCHED',   luck: 3,    weight: 2,   dur: [35, 55],   sky: ['#001a14', '#00382b', '#06604a'], fx: 'glitch', desc: 'x3 luck. VERY RARE. Error 404 and NULL can roll.' },
 };
 
@@ -185,3 +201,40 @@ function bestTier(s) {
 }
 function anyVariant(s, v) { return Object.keys(s.inv).some(k => k.endsWith(':' + v) && s.inv[k] > 0) || !!(s.variantsSeen && s.variantsSeen[v]); }
 function discovered(s) { return Object.keys(s.index).length; }
+
+
+// ---- v1.4: rotating market, quests, rebirth, fusion ----
+// Market potions are stronger than the shop ones. The market picks a few of them (and some aura offers) every 6 hours.
+const MARKET_MS = 6 * 3600 * 1000;
+const MARKET_POTIONS = [
+  { id: 'mega',    name: 'Mega Luck Potion',   desc: 'x25 luck for 3 min',                  kind: 'luck',    mult: 25,  secs: 180, cost: 1500000,   stock: 2, color: '#ff9a2e' },
+  { id: 'cosmic',  name: 'Cosmic Luck Potion', desc: 'x60 luck for 2 min',                  kind: 'luck',    mult: 60,  secs: 120, cost: 12000000,  stock: 2, color: '#b36bff' },
+  { id: 'omega',   name: 'Omega Luck Potion',  desc: 'x150 luck for 1 min',                 kind: 'luck',    mult: 150, secs: 60,  cost: 90000000,  stock: 1, color: '#ff3d6e' },
+  { id: 'golden',  name: 'Golden Touch',       desc: 'x5 coins from every roll, 5 min',     kind: 'coins',   mult: 5,   secs: 300, cost: 600000,    stock: 3, color: '#ffd24a' },
+  { id: 'hasteu',  name: 'Ultra Haste',        desc: 'Rolls 4x as fast for 4 min',          kind: 'speed',   mult: 4,   secs: 240, cost: 800000,    stock: 3, color: '#27f0e0' },
+  { id: 'elixir',  name: 'Variant Elixir',     desc: 'Variants 10x more likely for 3 min',  kind: 'variant', mult: 10,  secs: 180, cost: 1000000,   stock: 2, color: '#e07bff' },
+  { id: 'beacon',  name: 'Biome Beacon',       desc: 'Instantly summons a rare biome',      kind: 'beacon',  mult: 1,   secs: 0,   cost: 2000000,   stock: 2, color: '#5fe08a' },
+];
+const POTION_BY_ID = {};
+POTIONS.forEach(p => POTION_BY_ID[p.id] = p); MARKET_POTIONS.forEach(p => POTION_BY_ID[p.id] = p);
+
+const FUSE_COST = 5;
+const REBIRTH = { luckPer: 0.25, coinPer: 0.15 };
+const rebirthReq = n => Math.min(1e11, 1e6 * Math.pow(7, n));
+
+// real clock window, e.g. [22, 5] = 10 PM to 5 AM local time
+function inHours(h, d) { const x = (d || new Date()).getHours(); return h[0] > h[1] ? (x >= h[0] || x < h[1]) : (x >= h[0] && x < h[1]); }
+function auraLock(a) { return a.biome ? BIOMES[a.biome].name + ' only' : a.rb ? 'Rebirth ' + a.rb + ' only' : a.hours ? 'Night hours only' : ''; }
+
+// daily quests. need[] = difficulty steps, w = reward weight
+const QUEST_DEFS = [
+  { id: 'rolls',   kind: 'rolls',   need: [20, 40, 80],  w: 1,   text: n => 'Roll ' + n + ' times' },
+  { id: 'new',     kind: 'new',     need: [1, 2],        w: 1.6, text: n => 'Discover ' + (n > 1 ? n + ' new auras' : 'a new aura') },
+  { id: 'rare',    kind: 'rare',    need: [1, 2, 3],     w: 1.3, text: n => 'Roll ' + (n > 1 ? n + ' Rare' : 'a Rare') + ' or better' },
+  { id: 'epic',    kind: 'epic',    need: [1],           w: 2.2, text: () => 'Roll an Epic or better' },
+  { id: 'biome',   kind: 'biome',   need: [5, 10],       w: 1.2, text: n => 'Roll ' + n + ' times during a weather event' },
+  { id: 'potion',  kind: 'potion',  need: [1],           w: .8,  text: () => 'Use a potion' },
+  { id: 'sell',    kind: 'sell',    need: [1],           w: .8,  text: () => 'Sell extra auras' },
+  { id: 'variant', kind: 'variant', need: [1],           w: 2.4, text: () => 'Roll a Shiny or better' },
+  { id: 'fuse',    kind: 'fuse',    need: [1],           w: 1.2, text: () => 'Fuse auras together' },
+];

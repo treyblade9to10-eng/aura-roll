@@ -129,6 +129,17 @@ class Stage {
       ctx.fillStyle = bm ? '#ff4d5e' : '#eaf0ff'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
       ctx.fillStyle = bm ? 'rgba(120,0,20,.35)' : 'rgba(120,140,190,.25)'; ctx.beginPath(); ctx.arc(x - r * .3, y - r * .1, r * .22, 0, 6.283); ctx.arc(x + r * .35, y + r * .3, r * .15, 0, 6.283); ctx.fill(); ctx.restore();
     }
+    if (b === 'eclipse') {   // black sun with a burning rim
+      const x = w * .72, y = h * .2, r = Math.min(w, h) * .085; ctx.save(); ctx.globalAlpha = a;
+      FX.dot(ctx, [255, 170, 60], x, y, r * 4.2, .6); FX.dot(ctx, [255, 230, 170], x, y, r * 1.9, .55 + .1 * Math.sin(t * 2));
+      ctx.fillStyle = '#020006'; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,214,140,.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r + 1, 0, 6.283); ctx.stroke(); ctx.restore();
+    }
+    if (b === 'rainbow') {   // a big soft arc behind the mountains
+      const cx = w * .5, cy = this.cy() + this.R() * .6 + h * .05, R0 = Math.min(w * .62, h * .6), cols = ['#ff4d4d', '#ff9a2e', '#ffe14a', '#4dff88', '#4dc8ff', '#7a5cff'];
+      ctx.save(); ctx.globalAlpha = a * (.3 + .06 * Math.sin(t * .8)); ctx.lineWidth = R0 * .07;
+      cols.forEach((c, i) => { ctx.strokeStyle = c; ctx.beginPath(); ctx.arc(cx, cy, R0 - i * R0 * .07, Math.PI * 1.08, Math.PI * 1.92); ctx.stroke(); }); ctx.restore();
+    }
     if (b === 'night' || b === 'normal') { // shooting stars
       if (Math.random() < .004) this.shoot.push({ x: Math.random() * w, y: Math.random() * h * .3, age: 0, life: .7 });
     }

@@ -5,9 +5,9 @@
 
 const CUT_STYLE = {
   slash: ['treyblade', 'katana', 'reaper', 'worldbreak', 'samurai'],
-  wings: ['celestia', 'seraph', 'archangel', 'phoenix', 'vampire', 'feather'],
-  rift: ['rift', 'gate', 'error404', 'null', 'segfault', 'oblivion', 'glitch'],
-  bang: ['singularity', 'bigbang', 'hypernova', 'supernova', 'infinity', 'omniverse', 'architect', 'genesis', 'voidwalker', 'monarch'],
+  wings: ['celestia', 'seraph', 'archangel', 'phoenix', 'vampire', 'feather', 'ascendant'],
+  rift: ['rift', 'gate', 'error404', 'null', 'segfault', 'oblivion', 'glitch', 'witching'],
+  bang: ['singularity', 'bigbang', 'hypernova', 'supernova', 'infinity', 'omniverse', 'architect', 'genesis', 'voidwalker', 'monarch', 'afterlife', 'totality', 'ouroboros', 'cycle'],
   storm: ['tempest', 'thundergod', 'hurricane', 'maelstrom', 'thunder', 'stormborn'],
 };
 const cutStyleOf = id => { for (const k in CUT_STYLE) if (CUT_STYLE[k].includes(id)) return k; return 'converge'; };
