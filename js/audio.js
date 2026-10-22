@@ -53,6 +53,15 @@ const Sound = (() => {
       tone({ f: 90 + tier * 12, to: 400 + tier * 160, t: dur, type: 'sawtooth', v: .04 + tier * .008, lp: 1200, atk: dur * .8 });
       if (tier >= 3) for (let i = 0; i < 8; i++) tone({ f: N(PENT[i % 7] + 12 * (1 + (i > 3 ? 1 : 0))), t: .12, type: 'triangle', v: .05, at: dur * (.4 + i * .07) });
     },
+    // cutscene build: rising drone + noise + a heartbeat that speeds up
+    cutBuild(dur, tier) {
+      noise({ f: 150, to: 5000 + tier * 600, t: dur, v: .09, q: 1.5, atk: dur * .95 });
+      tone({ f: 55, to: 160 + tier * 14, t: dur, type: 'sawtooth', v: .06, lp: 700, atk: dur * .9 });
+      let at = 0, gap = Math.max(.3, dur / 5);
+      while (at < dur - .15) { tone({ f: 62, to: 38, t: .22, type: 'sine', v: .3, at }); tone({ f: 62, to: 38, t: .2, type: 'sine', v: .2, at: at + gap * .25 }); at += gap; gap = Math.max(.2, gap * .88); }
+    },
+    slash() { noise({ f: 5000, to: 1500, t: .18, v: .3, type: 'highpass', atk: .005 }); tone({ f: 900, to: 200, t: .15, type: 'sawtooth', v: .08, lp: 2500 }); },
+    zap() { noise({ f: 3000, to: 400, t: .35, v: .35, type: 'bandpass', q: .6, atk: .004 }); tone({ f: 80, to: 40, t: .5, type: 'sine', v: .3 }); },
     reveal(tier) {
       const base = [0, 0, -3, -5, -7, -5, -2, 0][tier];
       if (tier === 0) { tone({ f: N(base + 7), t: .25, type: 'triangle', v: .12 }); return; }

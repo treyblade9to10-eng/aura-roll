@@ -12,7 +12,7 @@ function freshState() {
     potions: {},               // id -> count owned
     active: [],                // [{id, kind, mult, left}]
     ach: {}, best: null, bestOdds: 0, play: 0, created: Date.now(),
-    settings: { sound: true, quick: false, auto: false },
+    settings: { sound: true, quick: false, auto: false, cine: 'full' },
     seen: {},                  // keys revealed at least once (for index NEW badges)
     admin: { luck: 1, nocd: false, used: false },   // owner tools; only honored while Cloud.admin is true
   };

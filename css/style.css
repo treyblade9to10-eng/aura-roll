@@ -287,3 +287,14 @@ details.adv[open] summary { margin-bottom: 8px; color: #fff; }
 /* toasts sit at the bottom while a dialog is open so they never cover its buttons */
 #modal:not(.hidden) ~ #toasts { top: max(8px, env(safe-area-inset-top)); bottom: auto; right: 50%; transform: translateX(50%); align-items: center; z-index: 40; }
 #app.open #modal:not(.hidden) ~ #toasts { right: 50%; }
+
+/* ---- v1.2 cutscenes ---- */
+#cine.cut { display: block; background: #02030a; animation: none; cursor: pointer; }
+#cine.cut.out { animation: cfade .5s reverse forwards; }
+#cine.cut canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#cine.cut .ctxt { position: absolute; left: 0; right: 0; bottom: max(11%, calc(env(safe-area-inset-bottom) + 70px)); text-align: center; pointer-events: none; }
+#cine.cut .c2 { font-size: clamp(44px, 11vw, 120px); }
+#cine.cut .c3 { margin-top: 8px; }
+#cine .c5 { display: inline-block; margin-top: 10px; padding: 3px 12px; background: var(--good); color: #04120a; font: 900 13px var(--bd); letter-spacing: .2em; animation: cup .8s 1.2s backwards, pulse .8s 2s infinite alternate; }
+#cine.cut .skiphint { position: absolute; left: 0; right: 0; bottom: max(3.5%, calc(env(safe-area-inset-bottom) + 22px)); margin: 0; text-align: center; animation: cup 1s 1.4s backwards; }
+@media (max-height: 500px) { #cine.cut .ctxt { bottom: 12%; } #cine.cut .c2 { font-size: clamp(34px, 8vw, 80px); } }

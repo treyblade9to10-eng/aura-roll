@@ -166,13 +166,14 @@ const UI = {
   finishRoll(res, tier, auto) {
     const st = this.stage, col = this.colorOf(res);
     Game.award(res);
-    st.endCharge(); st.setDim(0); st.reveal(tier, col); Sound.reveal(tier);
+    const cine = tier >= 5 && !(auto && tier < 6) && (Game.s.settings.cine || 'full') !== 'off';
+    st.endCharge(); st.setDim(0); if (!cine) { st.reveal(tier, col); Sound.reveal(tier); }
     this.refreshEquipped(); this.refreshHud(); this.pushRecent(res); this.coinPop(res.coins);
     if (res.isNew || res.isNewVariant) this.badge.bag = true;
     this.lastRes = res;
     $('#roll').classList.remove('busy'); $('#rollTxt').textContent = 'ROLL';
     Game.cooldown = Game.cooldownSecs(); Game.cooldownTotal = Game.cooldown;
-    if (tier >= 5 && !(auto && tier < 6)) { this.hideReveal(true); this.showCine(res, tier); }
+    if (cine) { this.hideReveal(true); this.showCine(res, tier); }
     else { this.showCard(res); this.busy = false; }
     if (this.tab === 'bag') this.renderBag();
     if (this.tab === 'index') this.renderIndex();
@@ -199,13 +200,13 @@ const UI = {
     if (this.tab === 'bag') this.renderBag(); this.showCard(this.lastRes);
   },
   showCine(res, tier) {
-    const i = info(res.key), c = $('#cine'), col = this.colorOf(res);
-    c.style.setProperty('--tc', col); c.classList.remove('hidden', 'out');
-    c.innerHTML = '<div class="c1">' + i.tier.name.toUpperCase() + (res.variant.id !== 'normal' ? ' &middot; ' + res.variant.name.toUpperCase() : '') + '</div><div class="c2 nmx t-' + i.tier.id + '">' + esc(i.aura.name.toUpperCase()) + '</div><div class="c3">' + fmtOdds(res.eff) + '</div><div class="c4">TAP TO CONTINUE</div>';
-    const open = performance.now(), hold = tier >= 7 ? 5200 : tier >= 6 ? 4200 : 3200;
-    let closed = false; const close = () => { if (closed) return; closed = true; c.classList.add('out'); setTimeout(() => { c.classList.add('hidden'); this.busy = false; if (this.lastRes === res) this.showCard(res); }, 600); };
-    c.onclick = () => { if (performance.now() - open > 1100) close(); };
-    setTimeout(close, hold);
+    Cutscene.play(res, tier, () => { if (this.lastRes === res) this.showCard(res); this.busy = false; });
+  },
+  // watch the cutscene of an aura you own again (no rewards, no roll)
+  replayCine(key, res) {
+    if (this.busy) return; const i = info(key), tier = Math.max(5, Math.min(7, tierIndex(i.eff)));
+    this.closeModal(); this.closePanel(); this.hideReveal(true); this.busy = true;
+    Cutscene.play(res || { aura: i.aura, variant: i.variant, key, eff: i.eff, isNew: false }, tier, () => { this.busy = false; }, { replay: true });
   },
 
   // ---------- panel ----------
@@ -233,6 +234,7 @@ const UI = {
     else if (act === 'daily') { const g = Game.claimDaily(); if (g) { Sound.ach(); this.toast('Daily Gift claimed', '+' + fmtN(g) + ' coins and a Luck Potion', '#ffc83a'); } this.renderShop(); this.refreshHud(); }
     else if (act === 'buyp') { if (Game.buyPotion(v)) Sound.buy(); else Sound.deny(); this.renderShop(); this.refreshHud(); }
     else if (act === 'usep') { if (Game.usePotion(v)) { Sound.buy(); this.toast('Potion active', '', '#4de28a'); } this.renderShop(); this.refreshHud(); }
+    else if (act === 'cine') { const o = ['full', 'short', 'off']; Game.s.settings.cine = o[(o.indexOf(Game.s.settings.cine || 'full') + 1) % 3]; Game.save(); Sound.click(); this.renderMore(); }
     else if (act === 'sound') { Game.s.settings.sound = Sound.toggle(); Game.save(); this.renderMore(); }
     else if (act === 'export') { const ta = $('#codeBox'); ta.value = Game.exportCode(); ta.select(); try { navigator.clipboard.writeText(ta.value); this.toast('Save code copied', 'Paste it somewhere safe', '#36e6ff'); } catch (x) { } }
     else if (act === 'import') { if (Game.importCode($('#codeBox').value)) { this.toast('Save loaded', '', '#4de28a'); this.refreshEquipped(); this.refreshHud(); this.refreshToggles(); this.renderMore(); } else { Sound.deny(); this.toast('That code did not work', 'Copy the whole thing', '#ff4d6a'); } }
@@ -275,7 +277,8 @@ const UI = {
     this.openModal(i, '<div class="kv"><span>Rarity</span><span>' + i.tier.name + '</span><span>Odds</span><span>' + fmtOdds(i.aura.odds) + '</span>' +
       (i.variant.id !== 'normal' ? '<span>With variant</span><span>' + fmtOdds(i.eff) + '</span>' : '') +
       '<span>Owned</span><span>x' + n.toLocaleString() + '</span><span>Luck while equipped</span><span>+' + (lb * 100).toFixed(1) + '%</span><span>Coin bonus while equipped</span><span>+' + (cb * 100).toFixed(1) + '%</span><span>Coins per roll as this</span><span>' + fmtN(Game.coinsFor(i.aura, i.variant)) + '</span><span>Sell value (each extra)</span><span>' + fmtN(sell) + '</span></div>' +
-      '<div class="acts"><button class="btn" id="mEq"' + (eq ? ' disabled' : '') + '>' + (eq ? 'EQUIPPED' : 'EQUIP') + '</button>' + (n > 1 ? '<button class="btn gold" id="mSell">SELL ' + (n - 1) + ' EXTRA<small>+' + fmtN(sell * (n - 1)) + ' coins</small></button>' : '') + '<button class="btn ghost" id="mClose">CLOSE</button></div>');
+      '<div class="acts"><button class="btn" id="mEq"' + (eq ? ' disabled' : '') + '>' + (eq ? 'EQUIPPED' : 'EQUIP') + '</button>' + (n > 1 ? '<button class="btn gold" id="mSell">SELL ' + (n - 1) + ' EXTRA<small>+' + fmtN(sell * (n - 1)) + ' coins</small></button>' : '') + (tierIndex(i.eff) >= 5 ? '<button class="btn ghost" id="mCine">WATCH CUTSCENE</button>' : '') + '<button class="btn ghost" id="mClose">CLOSE</button></div>');
+    const mc = $('#mCine'); if (mc) mc.onclick = () => this.replayCine(key);
     $('#mEq').onclick = () => { Game.equip(key); Sound.click(); this.refreshEquipped(); this.refreshHud(); if (this.tab === 'bag') this.renderBag(); this.closeModal(); };
     const sb = $('#mSell'); if (sb) sb.onclick = () => { const g = Game.sellExtras(key); Sound.coin(); this.toast('Sold for ' + fmtN(g) + ' coins', '', '#ffc83a'); this.refreshHud(); if (this.tab === 'bag') this.renderBag(); this.closeModal(); };
     $('#mClose').onclick = () => this.closeModal();
@@ -366,6 +369,7 @@ const UI = {
         ['Coin multiplier', 'x' + Game.coinMult().toFixed(2)], ['Roll cooldown', Game.cooldownSecs().toFixed(2) + 's'], ['Time played', fmtPlay(s.play)]]) + '</div>' +
       '<div class="sec">Variants</div><p class="sub">Any roll can also be a variant: Shiny 1 in 30, Inverted 1 in 300, Void 1 in 3,000. They multiply your coins and their odds stack on top of the aura.</p>' +
       '<div class="sec">Settings</div><div class="row"><div class="info"><div class="t">Sound</div></div><button class="btn' + (Sound.on ? '' : ' ghost') + '" data-act="sound">' + (Sound.on ? 'ON' : 'OFF') + '</button></div>' +
+      '<div class="row"><div class="info"><div class="t">Cutscenes</div><div class="d">For Mythic and above. Tap to skip any time.</div></div><button class="btn' + (s.settings.cine === 'off' ? ' ghost' : '') + '" data-act="cine">' + ({ full: 'FULL', short: 'SHORT', off: 'OFF' }[s.settings.cine || 'full']) + '</button></div>' +
       '<details class="adv"><summary>Backup code (advanced)</summary><p class="sub">Only needed if you do not want to sign in. Copy the code to move your game by hand.</p><textarea class="code" id="codeBox" placeholder="Paste a save code here to load it"></textarea>' +
       '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn" data-act="export" style="flex:1">COPY CODE</button><button class="btn gold" data-act="import" style="flex:1">LOAD CODE</button></div></details>' +
       '<div style="margin-top:22px"><button class="btn red" data-act="reset" style="width:100%">RESET GAME</button></div>');

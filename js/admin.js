@@ -19,6 +19,7 @@ const Admin = {
       '<div class="arow"><span>No roll cooldown</span><button class="btn' + (a.nocd ? '' : ' ghost') + '" data-ad="nocd">' + (a.nocd ? 'ON' : 'OFF') + '</button></div>' +
       '<div class="asec">Aura</div><select id="adAura" class="search">' + auraOpts + '</select><select id="adVar" class="search">' + varOpts + '</select>' +
       '<div class="arow"><button class="btn" data-ad="forceRoll" style="flex:1">ROLL IT<small>with the full reveal</small></button><button class="btn gold" data-ad="give" style="flex:1">ADD TO BAG<small>instantly</small></button></div>' +
+      '<div class="arow"><button class="btn ghost" data-ad="cine" style="flex:1">PREVIEW CUTSCENE<small>no roll, nothing changes</small></button></div>' +
       '<div class="asec">World</div><div class="arow"><select id="adBiome" class="search" style="margin:0">' + biomeOpts + '</select><button class="btn" data-ad="biome">SET BIOME</button></div>' +
       '<div class="asec">Quick unlocks</div><div class="arow"><button class="btn" data-ad="potions" style="flex:1">5 OF EACH POTION</button><button class="btn" data-ad="shop" style="flex:1">AUTO + FAST</button></div>' +
       '<div class="arow"><button class="btn" data-ad="all" style="flex:1">UNLOCK EVERY AURA<small>one of each</small></button></div>' +
@@ -37,6 +38,7 @@ const Admin = {
     else if (k === 'nocd') { a.nocd = !a.nocd; a.used = true; Game.cooldown = 0; Game.save(); this.open(); }
     else if (k === 'give') { const key = $('#adAura').value + ':' + $('#adVar').value; Game.adminGive(key, 1); Sound.buy(); UI.toast('Added to your bag', info(key).name, info(key).tier.color); if (UI.tab === 'bag') UI.renderBag(); if (UI.tab === 'index') UI.renderIndex(); UI.refreshEquipped(); }
     else if (k === 'forceRoll') { Game.forced = { id: $('#adAura').value, variant: $('#adVar').value }; a.used = true; Game.cooldown = 0; UI.closeModal(); UI.closePanel(); UI.roll(); }
+    else if (k === 'cine') { const id = $('#adAura').value, vid = $('#adVar').value, aura = AURA_BY_ID[id], v = VARIANT_BY_ID[vid]; UI.replayCine(id + ':' + vid, { aura, variant: v, key: id + ':' + vid, eff: aura.odds * v.chance, isNew: false }); }
     else if (k === 'biome') { const id = $('#adBiome').value; a.used = true; Game.setBiome(id); if (id === 'normal') Game.nextBiome = 60; }
     else if (k === 'potions') { for (const p of POTIONS) s.potions[p.id] = (s.potions[p.id] || 0) + 5; a.used = true; Game.save(); Sound.buy(); UI.toast('5 of each potion added', '', '#4de28a'); }
     else if (k === 'shop') { s.up.auto = 1; s.up.skip = 1; a.used = true; Game.save(); UI.refreshToggles(); Sound.buy(); UI.toast('Auto Roll and Fast Reveals unlocked', '', '#4de28a'); }
