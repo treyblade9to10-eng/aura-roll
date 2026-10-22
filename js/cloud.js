@@ -14,7 +14,7 @@ const Cloud = (() => {
   const META = 'auraroll.cloud';
 
   // status: off (cannot reach Firebase) | out (not signed in) | sync (checking) | saving | saved | denied (rules not set up) | error
-  const C = { status: 'out', user: null, admin: false, savedAt: 0, error: '', listeners: [] };
+  const C = { status: 'out', user: null, resolved: false, admin: false, savedAt: 0, error: '', listeners: [] };
   let db = null, pushT = null, pushing = false, again = false, keyRef = null, conflictOpen = false, started = false;
 
   const getMeta = () => { try { return JSON.parse(localStorage.getItem(META)) || {}; } catch (e) { return {}; } };
@@ -28,7 +28,9 @@ const Cloud = (() => {
   const dirty = () => { const m = getMeta(); return !(C.user && m.uid === C.user.uid && m.hash === hash(stateKey())); };
   const summary = d => ({ rolls: d.rolls || 0, found: Object.keys(d.index || {}).length, coins: d.coins || 0 });
 
-  function set(status, msg) { C.status = status; C.error = msg || ''; C.listeners.forEach(f => f()); }
+  // one broken listener must never stop the others (owner badge, status pill...)
+  function fire() { C.listeners.slice().forEach(f => { try { f(); } catch (e) { console.warn('cloud listener failed', e); } }); }
+  function set(status, msg) { C.status = status; C.error = msg || ''; fire(); }
   function toast(a, b, c) { if (typeof UI !== 'undefined') UI.toast(a, b, c); }
 
   function loadSdk() {
@@ -45,7 +47,7 @@ const Cloud = (() => {
       db = firebase.database();
       firebase.auth().getRedirectResult().catch(() => { });
       firebase.auth().onAuthStateChanged(u => {
-        C.user = u || null; watchKey(u);
+        C.user = u || null; C.resolved = false; watchKey(u);
         if (u) resolve(); else { clearTimeout(pushT); pushT = null; set('out'); }
       });
     } catch (e) { set('off', e.message); return; }
@@ -103,6 +105,7 @@ const Cloud = (() => {
   }
 
   // first look after sign-in: decide whether cloud or this device wins
+  function markResolved() { if (!C.resolved) { C.resolved = true; fire(); } }
   async function resolve() {
     set('sync');
     let remote;
@@ -110,14 +113,14 @@ const Cloud = (() => {
     catch (e) {
       if (e && (e.code === 'PERMISSION_DENIED' || /permission_denied/i.test(e.message || ''))) set('denied', 'Cloud saving is not switched on yet (Firebase rules).');
       else set('error', e.message || 'Could not reach the cloud');
-      return;
+      markResolved(); return;
     }
     const m = getMeta(), s = Game.s, empty = !s.rolls && !s.coins;
-    if (!remote) { push(true); return; }
-    if (m.uid === C.user.uid && m.at === remote.at) { set('saved'); if (dirty()) schedule(); return; }
-    if (empty) { applyRemote(remote, 'Loaded your cloud save'); return; }
-    if (m.uid === C.user.uid && !dirty()) { applyRemote(remote, 'Loaded your newest save'); return; }
-    showConflict(remote);
+    if (!remote) { await push(true); markResolved(); return; }
+    if (m.uid === C.user.uid && m.at === remote.at) { set('saved'); if (dirty()) schedule(); markResolved(); return; }
+    if (empty) { applyRemote(remote, 'Loaded your cloud save'); markResolved(); return; }
+    if (m.uid === C.user.uid && !dirty()) { applyRemote(remote, 'Loaded your newest save'); markResolved(); return; }
+    showConflict(remote);   // resolved once the player picks a side
   }
   // when the tab comes back to the front, see if another device saved in the meantime
   async function check() {
@@ -151,7 +154,7 @@ const Cloud = (() => {
       '<p class="sub">Your cloud save and this device have different progress. Pick the one to keep. The other one is replaced.</p>' +
       '<div class="cmp"><div><b>CLOUD</b><span>' + fmt(b.rolls) + ' rolls</span><span>' + b.found + ' auras</span></div><div><b>THIS DEVICE</b><span>' + fmt(a.rolls) + ' rolls</span><span>' + a.found + ' auras</span></div></div>' +
       '<div class="acts"><button class="btn" id="cfCloud">USE CLOUD</button><button class="btn gold" id="cfLocal">USE THIS DEVICE</button></div>', true);
-    const done = () => { conflictOpen = false; UI.closeModal(); };
+    const done = () => { conflictOpen = false; UI.closeModal(); markResolved(); };
     $('#cfCloud').onclick = () => { done(); applyRemote(remote, 'Loaded your cloud save'); };
     $('#cfLocal').onclick = () => { done(); push(true); toast('Saving this device to the cloud', '', '#36e6ff'); };
   }
@@ -164,7 +167,7 @@ const Cloud = (() => {
     keyRef = db.ref('aurakeys/' + u.uid);
     keyRef.on('value', s => { const now = s.val() != null; if (now !== C.admin) { C.admin = now; changed(); } }, () => { if (C.admin) { C.admin = false; changed(); } });
   }
-  function changed() { C.listeners.forEach(f => f()); if (typeof UI !== 'undefined') UI.refreshAdminBits(); }
+  function changed() { fire(); if (typeof UI !== 'undefined') UI.refreshAdminBits(); }
   async function unlock(code) {
     if (!C.user || !db) throw new Error('Sign in with Google first');
     code = String(code || '').trim(); if (!code) throw new Error('Type the code first');
@@ -174,7 +177,7 @@ const Cloud = (() => {
   }
   async function lock() { if (!C.user || !db) return; try { await db.ref('aurakeys/' + C.user.uid).remove(); } catch (e) { } C.admin = false; changed(); }
 
-  Object.assign(C, { init, signIn, signOut, push, unlock, lock, loadCloudNow, onChange: f => C.listeners.push(f), dirty,
+  Object.assign(C, { ref: p => (db ? db.ref(p) : null), ts: () => firebase.database.ServerValue.TIMESTAMP, init, signIn, signOut, push, unlock, lock, loadCloudNow, onChange: f => C.listeners.push(f), dirty,
     saveNow: () => { clearTimeout(pushT); pushT = null; return push(); } });
   return C;
 })();

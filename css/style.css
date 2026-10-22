@@ -298,3 +298,16 @@ details.adv[open] summary { margin-bottom: 8px; color: #fff; }
 #cine .c5 { display: inline-block; margin-top: 10px; padding: 3px 12px; background: var(--good); color: #04120a; font: 900 13px var(--bd); letter-spacing: .2em; animation: cup .8s 1.2s backwards, pulse .8s 2s infinite alternate; }
 #cine.cut .skiphint { position: absolute; left: 0; right: 0; bottom: max(3.5%, calc(env(safe-area-inset-bottom) + 22px)); margin: 0; text-align: center; animation: cup 1s 1.4s backwards; }
 @media (max-height: 500px) { #cine.cut .ctxt { bottom: 12%; } #cine.cut .c2 { font-size: clamp(34px, 8vw, 80px); } }
+
+/* ---- v1.3 admin tabs, players, live ---- */
+.atabs { display: flex; gap: 6px; margin: 10px 0 8px; position: sticky; top: 0; z-index: 2; background: var(--panel); padding: 4px 0; }
+.atabs button { flex: 1; padding: 10px 0; border: 1px solid var(--line2); border-radius: 5px; font: 900 italic 16px var(--hd); letter-spacing: .12em; color: var(--dim); }
+.atabs button.on { background: linear-gradient(180deg, #ffe27a, #f0a21a); color: #1a1000; border-color: transparent; }
+.prow { display: grid; grid-template-columns: 14px 1fr auto; column-gap: 10px; align-items: center; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+.prow:hover { border-color: var(--gold); }
+.prow b { font: 800 italic 19px var(--hd); } .prow span { font: 700 13px var(--bd); color: var(--dim); text-align: right; }
+.prow small { grid-column: 2 / 4; color: var(--dim); font-size: 12px; margin-top: 2px; }
+.od { width: 10px; height: 10px; border-radius: 50%; background: #3a4257; } .od.on { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.frow { padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; } .frow span { display: block; color: var(--dim); font-size: 12px; }
+.who { font: 800 italic 22px var(--hd); }
+#modal:not(.hidden) ~ #toasts .toast:not(:last-child) { display: none; }

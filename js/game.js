@@ -14,6 +14,8 @@ function freshState() {
     ach: {}, best: null, bestOdds: 0, play: 0, created: Date.now(),
     settings: { sound: true, quick: false, auto: false, cine: 'full' },
     seen: {},                  // keys revealed at least once (for index NEW badges)
+    forcedNext: null,          // set by the owner (live command): the next roll is this aura
+    evSeen: [],                // ids of one-time server events already applied
     admin: { luck: 1, nocd: false, used: false },   // owner tools; only honored while Cloud.admin is true
   };
 }
@@ -48,13 +50,14 @@ const Game = {
 
   // ---- owner tools (only work while the signed-in account is verified as the owner) ----
   isAdmin() { return typeof Cloud !== 'undefined' && Cloud.admin === true; },
+  eventLuck() { return typeof Live !== 'undefined' ? Live.luckMult() : 1; },
   adminLuck() { return this.isAdmin() ? Math.max(1, this.s.admin.luck || 1) : 1; },
 
   // ---- multipliers ----
   potionMult(kind) { let m = 1; for (const p of this.s.active) if (p.kind === kind) m = Math.max(m, p.mult); return m; },
   equippedAura() { const k = this.s.equipped; return k ? AURA_BY_ID[k.split(':')[0]] : null; },
   equippedBonus() { const a = this.equippedAura(); return a ? Math.log10(a.odds) * 0.04 * (1 + (VARIANT_BY_ID[this.s.equipped.split(':')[1]].mult > 1 ? .5 : 0)) : 0; },
-  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck(); },
+  luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck() * this.eventLuck(); },
   coinMult() { const a = this.equippedAura(); return (1 + this.s.up.coins * 0.12) * (a ? 1 + Math.log10(a.odds) * 0.05 : 1); },
   cooldownSecs() { return this.isAdmin() && this.s.admin.nocd ? 0 : rollCooldown(this.s.up.speed) / this.potionMult('speed'); },
 
@@ -75,6 +78,8 @@ const Game = {
   sellValue(aura, variant) { return Math.max(1, Math.ceil(Math.pow(aura.odds, 0.7) * variant.mult * 1.5)); },
 
   rollNow() {
+    const fn = this.s.forcedNext;
+    if (fn) { this.s.forcedNext = null; const aura = AURA_BY_ID[fn.id], variant = VARIANT_BY_ID[fn.variant] || VARIANTS[0]; if (aura) return { aura, variant, key: aura.id + ':' + variant.id }; }
     if (this.forced && this.isAdmin()) {
       const f = this.forced; this.forced = null;
       const aura = AURA_BY_ID[f.id], variant = VARIANT_BY_ID[f.variant] || VARIANTS[0];
@@ -96,6 +101,7 @@ const Game = {
     if (!s.equipped) s.equipped = key;
     this.checkAch();
     this.save();
+    this.emit('rolled', res);
     return res;
   },
   checkAch() {
@@ -103,13 +109,21 @@ const Game = {
   },
 
   adminCoins(n) { if (!this.isAdmin()) return; this.s.coins += n; this.s.admin.used = true; this.save(); },
-  adminGive(key, n) {
-    if (!this.isAdmin()) return; const [id, v] = key.split(':'), s = this.s, aura = AURA_BY_ID[id], variant = VARIANT_BY_ID[v]; if (!aura || !variant) return;
+  adminGive(key, n) { if (!this.isAdmin()) return; this.s.admin.used = true; this.giveAura(key, n); },
+  // add auras to the bag (used by owner tools and by gifts the owner sends)
+  giveAura(key, n) {
+    const [id, v] = key.split(':'), s = this.s, aura = AURA_BY_ID[id], variant = VARIANT_BY_ID[v]; if (!aura || !variant) return false;
     s.inv[key] = (s.inv[key] || 0) + n; s.seen[key] = 1; s.index[id] = (s.index[id] || 0) + 1;
     if (v !== 'normal') s.variantsSeen[v] = 1;
     const eff = aura.odds * variant.chance; if (eff > s.bestOdds) { s.bestOdds = eff; s.best = key; }
     if (!s.equipped) s.equipped = key;
-    s.admin.used = true; this.checkAch(); this.save();
+    this.checkAch(); this.save(); return true;
+  },
+  takeAura(key, n) {
+    const s = this.s; if (!(s.inv[key] > 0)) return 0;
+    const took = Math.min(n, s.inv[key]); s.inv[key] -= took; if (s.inv[key] <= 0) delete s.inv[key];
+    if (s.equipped === key && !s.inv[key]) { const rest = Object.keys(s.inv).sort((a, b) => { const A = AURA_BY_ID[a.split(':')[0]], B = AURA_BY_ID[b.split(':')[0]]; return B.odds - A.odds; }); s.equipped = rest[0] || null; }
+    this.save(); return took;
   },
 
   // ---- inventory ----

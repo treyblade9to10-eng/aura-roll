@@ -70,6 +70,11 @@ const UI = {
     $('.ownertag').classList.toggle('hidden', !Cloud.admin);
     if (this.tab === 'more') this.refreshAccount();
   },
+  // redraw everything after the game state was changed from outside (cloud load, owner gifts)
+  refreshAll() {
+    this.refreshEquipped(); this.refreshHud(true); this.refreshToggles();
+    if (this.tab) { const t = this.tab; this.tab = null; this.openTab(t); }
+  },
   openDialog(title, body, locked) {
     this.closeModal(); const m = $('#modal'); m.classList.remove('hidden'); m.dataset.locked = locked ? '1' : '';
     $('#mbox').style.setProperty('--tc', '#ffc83a');
@@ -87,7 +92,7 @@ const UI = {
     if (Game.biome === 'normal') bb.style.display = 'none';
     else { bb.style.display = 'block'; bb.style.setProperty('--bc', BIOME_COL[Game.biome]); bb.innerHTML = '<span class="bl">' + fmtTime(Game.biomeLeft) + '</span>' + esc(b.name.toUpperCase()) + '<small>x' + b.luck + ' luck</small>'; }
     // potions
-    $('#potions').innerHTML = s.active.map(p => { const d = POTIONS.find(x => x.id === p.id); return '<div class="pot" style="--pc:' + d.color + '">' + esc(d.name) + ' <span>' + fmtTime(p.left) + '</span></div>'; }).join('');
+    $('#potions').innerHTML = Live.badge() + s.active.map(p => { const d = POTIONS.find(x => x.id === p.id) || { name: p.name || 'Boost', color: '#ffc83a' }; return '<div class="pot" style="--pc:' + d.color + '">' + esc(d.name) + ' <span>' + fmtTime(p.left) + '</span></div>'; }).join('');
     if (this.tab === 'shop') this.updateShopButtons();
     $('#tabs [data-tab=bag] .dot')?.remove();
     if (this.badge.bag && this.tab !== 'bag') $('#tabs [data-tab=bag]').insertAdjacentHTML('beforeend', '<i class="dot"></i>');
@@ -343,7 +348,7 @@ const UI = {
     const line = { off: 'Cannot reach the cloud right now. Your game still saves on this device.', out: 'Sign in with Google and your game saves online by itself. Open it on any phone or computer and pick up where you left off.',
       sync: 'Checking your cloud save...', saving: 'Saving...', saved: 'Saved online' + (Cloud.savedAt ? ' at ' + new Date(Cloud.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '') + '. It keeps saving by itself.',
       denied: 'Cloud saving is not switched on yet. Your game still saves on this device.', error: 'Could not save: ' + esc(Cloud.error) }[st];
-    let h = '<div class="sec" style="margin-top:0">Account</div><div class="acct ' + st + '"><div class="who">' + (u ? who : 'Not signed in') + '</div><p class="sub" style="margin:4px 0 10px">' + line + '</p>';
+    let h = '<div class="sec" style="margin-top:0">Account</div><div class="acct ' + st + '"><div class="who">' + (u ? who : 'Not signed in') + '</div><p class="sub" style="margin:4px 0 10px">' + line + '</p>' + (u ? '<p class="sub" style="margin:-4px 0 10px;font-size:12px">The game owner can see your name and progress, and can send you gifts and messages.</p>' : '');
     h += u ? '<div style="display:flex;gap:8px"><button class="btn" data-act="savenow" style="flex:1">SAVE NOW</button><button class="btn ghost" data-act="loadcloud" style="flex:1">LOAD CLOUD</button><button class="btn ghost" data-act="signout" style="flex:0 0 auto;min-width:0">SIGN OUT</button></div>'
       : '<button class="btn gold" data-act="signin" style="width:100%"' + (st === 'off' ? ' disabled' : '') + '>SIGN IN WITH GOOGLE</button>';
     return h + '</div>';
