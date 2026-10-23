@@ -215,8 +215,20 @@ const MARKET_POTIONS = [
   { id: 'elixir',  name: 'Variant Elixir',     desc: 'Variants 10x more likely for 3 min',  kind: 'variant', mult: 10,  secs: 180, cost: 1000000,   stock: 2, color: '#e07bff' },
   { id: 'beacon',  name: 'Biome Beacon',       desc: 'Instantly summons a rare biome',      kind: 'beacon',  mult: 1,   secs: 0,   cost: 2000000,   stock: 2, color: '#5fe08a' },
 ];
+// v1.5 Quick Market: new stock every 10 minutes. Smaller, cheaper potions (plus a rare find now and then).
+const QUICK_MS = 10 * 60 * 1000;
+const QUICK_POTIONS = [
+  { id: 'qluck',  name: 'Pocket Luck',   desc: 'x8 luck for 90 sec',                kind: 'luck',    mult: 8,  secs: 90,  cost: 70000, stock: 3, color: '#7dffb0' },
+  { id: 'qluck2', name: 'Lucky Sip',     desc: 'x3 luck for 4 min',                 kind: 'luck',    mult: 3,  secs: 240, cost: 30000, stock: 4, color: '#9be86a' },
+  { id: 'qhaste', name: 'Flash Haste',   desc: 'Rolls 3x as fast for 90 sec',       kind: 'speed',   mult: 3,  secs: 90,  cost: 45000, stock: 3, color: '#ff7a9a' },
+  { id: 'qcoin',  name: 'Lucky Coin',    desc: 'x3 coins from every roll, 2 min',   kind: 'coins',   mult: 3,  secs: 120, cost: 55000, stock: 3, color: '#ffe27a' },
+  { id: 'qelix',  name: 'Mini Elixir',   desc: 'Variants 4x more likely for 2 min', kind: 'variant', mult: 4,  secs: 120, cost: 120000, stock: 2, color: '#d9a0ff' },
+];
 const POTION_BY_ID = {};
-POTIONS.forEach(p => POTION_BY_ID[p.id] = p); MARKET_POTIONS.forEach(p => POTION_BY_ID[p.id] = p);
+POTIONS.forEach(p => POTION_BY_ID[p.id] = p); MARKET_POTIONS.forEach(p => POTION_BY_ID[p.id] = p); QUICK_POTIONS.forEach(p => POTION_BY_ID[p.id] = p);
+// what a running potion is worth right now: every extra drink of the same potion adds its time AND one more helping of its bonus
+function potionEffect(p) { const unit = p.unit || 0; const n = unit > 0 ? Math.max(1, Math.ceil(p.left / unit - 1e-9)) : 1; return 1 + n * (p.mult - 1); }
+function potionStacks(p) { return p.unit > 0 ? Math.max(1, Math.ceil(p.left / p.unit - 1e-9)) : 1; }
 
 const FUSE_COST = 5;
 const REBIRTH = { luckPer: 0.25, coinPer: 0.15 };

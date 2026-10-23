@@ -12,6 +12,7 @@ const Live = (() => {
   const clean = (s, n) => String(s == null ? '' : s).replace(/[<>&"]/g, '').slice(0, n);
   const num = (v, lim) => Math.max(-lim, Math.min(lim, Math.floor(+v || 0)));
   const ref = p => Cloud.ref(p);
+  const durText = secs => secs >= 86400 ? Math.round(secs / 86400 * 10) / 10 + ' days' : secs >= 3600 ? Math.round(secs / 360) / 10 + ' hours' : secs >= 120 ? Math.round(secs / 60) + ' min' : secs + ' sec';
   const notify = () => L.listeners.forEach(f => f());
   const toast = (a, b, c) => { if (typeof UI !== 'undefined') UI.toast(a, b, c || '#ffc83a', true); };
 
@@ -66,15 +67,21 @@ const Live = (() => {
 
   L.send = (uid, cmd) => ref('aura/inbox/' + uid).push(Object.assign({ at: Cloud.ts(), by: L.uid }, cmd));
   L.pulse = obj => ref('aura/events/pulse').set(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), at: Date.now(), by: L.uid }, obj));
-  L.luckParty = (mult, mins) => ref('aura/events/luck').set({ mult, until: Date.now() + mins * 60000, at: Date.now(), by: L.uid });
+  // parties stack: each one is its own entry (mult m, ends u). mult/until at the top mirror the combined values for older open tabs.
+  // Firebase may hand arrays back as objects, so the list is read either way
+  L.parties = e => { e = e || L.event; if (!e) return []; const now = Date.now(); const raw = e.list, list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? Object.values(raw) : (e.mult > 1 ? [{ m: e.mult, u: e.until }] : []); return list.filter(p => p && p.m > 1 && p.u > now); };
+  L.luckParty = (mult, secs) => {
+    const list = L.parties().concat([{ m: Math.max(2, Math.min(1000, +mult || 2)), u: Date.now() + Math.max(10, Math.min(7 * 86400, +secs || 600)) * 1000 }]).slice(-12);
+    return ref('aura/events/luck').set({ list, mult: list.reduce((a, p) => a * p.m, 1), until: Math.max.apply(null, list.map(p => p.u)), at: Date.now(), by: L.uid });
+  };
   L.endLuck = () => ref('aura/events/luck').remove();
   L.clearFeed = () => ref('aura/feed').remove().then(() => { L.feed = []; notify(); });
 
   // ---------- server-wide luck party ----------
-  L.luckMult = () => { const e = L.event; return e && e.mult > 1 && Date.now() < e.until ? Math.min(+e.mult, 1000) : 1; };
+  L.durText = durText;
+  L.luckMult = () => Math.min(L.parties().reduce((a, p) => a * Math.min(+p.m, 1000), 1), 1e6);
   L.badge = () => {
-    const e = L.event; if (!e || L.luckMult() <= 1) return '';
-    return '<div class="pot" style="--pc:#ffc83a">LUCK PARTY x' + L.luckMult() + ' <span>' + fmtTime((e.until - Date.now()) / 1000) + '</span></div>';
+    return L.parties().map(p => '<div class="pot" style="--pc:#ffc83a">LUCK PARTY x' + p.m + ' <span>' + fmtTime((p.u - Date.now()) / 1000) + '</span></div>').join('');
   };
 
   // ---------- one-time server events ----------
@@ -88,7 +95,7 @@ const Live = (() => {
     if (e.kind === 'coins') { const n = num(e.n, 1e15); s.coins = Math.max(0, s.coins + n); toast('Coin rain!', '+' + fmtN(n) + ' coins for everyone'); }
     else if (e.kind === 'biome' && BIOMES[e.id2] && age < 3 * 60000) { Game.setBiome(e.id2); toast('The owner changed the weather', BIOMES[e.id2].name); }
     else if (e.kind === 'msg') { if (e.by === L.uid) toast('Announcement sent', clean(e.text, 60)); else message('Announcement', e.text); }   // the sender keeps their admin panel open
-    else if (e.kind === 'cine' && AURA_BY_ID[e.aura] && age < 3 * 60000 && e.by !== L.uid) cine(e.aura, e.variant);
+    else if (e.kind === 'cine' && AURA_BY_ID[e.aura] && age < 3 * 60000) cine(e.aura, e.variant);
     Game.save(); if (typeof UI !== 'undefined') UI.refreshHud(true);
   }
   function message(title, text) {
@@ -108,8 +115,8 @@ const Live = (() => {
       case 'give': { const n = Math.max(1, num(c.n, 1000)); if (Game.giveAura(String(c.key), n)) toast('Gift from the owner', info(c.key).name + (n > 1 ? ' x' + n : '')); break; }
       case 'take': { const took = Game.takeAura(String(c.key), Math.max(1, num(c.n, 1000))); if (took) toast('The owner took an aura', info(c.key).name + (took > 1 ? ' x' + took : ''), '#ff4d6a'); break; }
       case 'luck': {
-        const mult = Math.max(1, Math.min(1000, +c.mult || 1)), secs = Math.max(10, Math.min(7200, +c.secs || 60));
-        s.active = s.active.filter(p => p.id !== 'owner'); s.active.push({ id: 'owner', name: 'Owner Boost', kind: 'luck', mult, left: secs }); toast('Luck boost from the owner', 'x' + mult + ' luck for ' + Math.round(secs / 60) + ' min'); break;
+        const mult = Math.max(1, Math.min(1000, +c.mult || 1)), secs = Game.addBoost(mult, c.secs);
+        toast('Luck boost from the owner', 'x' + mult + ' luck for ' + durText(secs) + ' (stacks with your other boosts)'); break;
       }
       case 'force': { if (AURA_BY_ID[c.id]) { s.forcedNext = { id: c.id, variant: VARIANT_BY_ID[c.variant] ? c.variant : 'normal' }; toast('Something is about to happen...', 'Your next roll is special'); } break; }
       case 'biome': { if (BIOMES[c.id]) { Game.setBiome(c.id); } break; }

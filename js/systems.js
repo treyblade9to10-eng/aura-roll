@@ -57,14 +57,31 @@ Object.assign(Game, {
     items.push({ id: 'a:' + a2.id + ':shiny', type: 'aura', key: a2.id + ':shiny', price: this.marketPrice(a2, VARIANT_BY_ID.shiny), stock: 1 });
     return items;
   },
+  // ---- quick market: same idea, but a new 3-item stock every 10 minutes (and a small chance of a rare find)
+  quickWin() { return Math.floor(Date.now() / QUICK_MS); },
+  quickKey() { return 'q' + this.quickWin() + ':' + (this.s.marketBump || 0); },
+  quickEndsIn() { return (this.quickWin() + 1) * QUICK_MS - Date.now(); },
+  quickStock() {
+    const rnd = seeded(this.quickWin() * 40503 + 7 + (this.s.marketBump || 0) * 104729), items = [];
+    const pool = QUICK_POTIONS.slice(), pot = [];
+    while (pot.length < 2) pot.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+    pot.sort((a, b) => a.cost - b.cost).forEach(p => items.push({ id: 'p:' + p.id, type: 'potion', pid: p.id, price: p.cost, stock: p.stock }));
+    const cheap = AURAS.filter(a => !a.biome && !a.rb && !a.hours && a.odds >= 150 && a.odds <= 8000), a1 = cheap[Math.floor(rnd() * cheap.length)];
+    items.push({ id: 'a:' + a1.id + ':normal', type: 'aura', key: a1.id + ':normal', price: Math.ceil(this.marketPrice(a1, VARIANT_BY_ID.normal) * 0.8), stock: 2 });
+    if (rnd() < 0.25) { const r = MARKET_POTIONS.filter(p => p.kind !== 'beacon'), p = r[Math.floor(rnd() * r.length)]; items.push({ id: 'r:' + p.id, type: 'potion', pid: p.id, price: Math.ceil(p.cost * 1.4), stock: 1, rare: true }); }
+    return items;
+  },
+
   marketPrice(a, v) { return Math.ceil(Math.pow(a.odds, 0.95) * 25 * (v.mult > 1 ? v.mult * 0.7 : 1)); },
-  marketBought(id) { const m = this.s.market; return m && m.key === this.marketKey() ? (m.bought[id] || 0) : 0; },
-  buyMarket(id) {
-    const it = this.marketStock().find(x => x.id === id); if (!it) return 'gone';
-    if (this.marketBought(id) >= it.stock) return 'soldout';
+  // which = 'market' (6h) or 'quick' (10 min); each keeps its own bought-list in the save
+  _mk(which) { const s = this.s; return which === 'quick' ? { slot: (s.quickM = s.quickM || { key: '', bought: {} }), key: this.quickKey(), stock: () => this.quickStock() } : { slot: s.market, key: this.marketKey(), stock: () => this.marketStock() }; },
+  marketBought(id, which) { const m = this._mk(which); return m.slot && m.slot.key === m.key ? (m.slot.bought[id] || 0) : 0; },
+  buyMarket(id, which) {
+    const m = this._mk(which), it = m.stock().find(x => x.id === id); if (!it) return 'gone';
+    if (this.marketBought(id, which) >= it.stock) return 'soldout';
     if (this.s.coins < it.price) return 'poor';
-    const m = this.s.market; if (m.key !== this.marketKey()) { m.key = this.marketKey(); m.bought = {}; }
-    this.s.coins -= it.price; m.bought[id] = (m.bought[id] || 0) + 1;
+    if (m.slot.key !== m.key) { m.slot.key = m.key; m.slot.bought = {}; }
+    this.s.coins -= it.price; m.slot.bought[id] = (m.slot.bought[id] || 0) + 1;
     if (it.type === 'potion') this.s.potions[it.pid] = (this.s.potions[it.pid] || 0) + 1; else this.giveAura(it.key, 1);
     this.save(); this.emit('market', it); return 'ok';
   },

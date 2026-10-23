@@ -1,6 +1,7 @@
 'use strict';
 // ---- v1.4 screens: rotating Market, daily Quests + streak, Rebirth, fusion ----
 
+function fmtClock(ms) { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); }
 function fmtLong(ms) { const m = Math.max(0, Math.ceil(ms / 60000)), h = Math.floor(m / 60); return h ? h + 'h ' + String(m % 60).padStart(2, '0') + 'm' : m + 'm'; }
 
 Object.assign(UI, {
@@ -17,8 +18,8 @@ Object.assign(UI, {
     if (act === 'qclaim') { const g = Game.claimQuest(+v); if (g) { Sound.coin(); this.toast('Quest reward', '+' + fmtN(g) + ' coins', '#ffc83a'); } this.renderQuests(); this.refreshHud(); return true; }
     if (act === 'qbonus') { if (Game.claimQuestBonus()) { Sound.ach(); this.toast('All quests done!', 'Bonus coins and 2 Luck Potions', '#ffc83a', true); } this.renderQuests(); this.refreshHud(); return true; }
     if (act === 'mbuy') {
-      const r = Game.buyMarket(v);
-      if (r === 'ok') { Sound.buy(); const it = Game.marketStock().find(x => x.id === v); this.toast('Bought', it.type === 'potion' ? POTION_BY_ID[it.pid].name : info(it.key).name, '#4de28a'); this.refreshEquipped(); } else Sound.deny();
+      const [w, id] = v.split('|'), r = Game.buyMarket(id, w);
+      if (r === 'ok') { Sound.buy(); const it = (w === 'quick' ? Game.quickStock() : Game.marketStock()).find(x => x.id === id); this.toast('Bought', it.type === 'potion' ? POTION_BY_ID[it.pid].name : info(it.key).name, '#4de28a'); this.refreshEquipped(); } else Sound.deny();
       this.renderMarket(); this.refreshHud(); return true;
     }
     if (act === 'rebirth') {
@@ -33,27 +34,30 @@ Object.assign(UI, {
 
   // ---------------------------------------------------------------- market
   renderMarket() {
-    const s = Game.s, stock = Game.marketStock(), sc = $('#panelBody').scrollTop;
-    this._mkKey = Game.marketKey();
-    let h = '<div class="mkhead"><div><b>Rotating Market</b><small>Stronger potions and aura deals than the shop. The stock is the same for everyone and changes every 6 hours.</small></div><div class="mkt"><span>NEW STOCK IN</span><b id="mkTimer">' + fmtLong(Game.marketEndsIn()) + '</b></div></div>';
+    const q = this.shopTab === 'quick', w = q ? 'quick' : 'market', s = Game.s, stock = q ? Game.quickStock() : Game.marketStock(), sc = $('#panelBody').scrollTop;
+    this._mkKey = q ? Game.quickKey() : Game.marketKey();
+    let h = q ? '<div class="mkhead"><div><b>Quick Market</b><small>Small, cheap deals that change every 10 minutes. Same for everyone. Keep an eye out for a rare find.</small></div><div class="mkt"><span>NEW STOCK IN</span><b id="mkTimer">' + fmtClock(Game.quickEndsIn()) + '</b></div></div>'
+      : '<div class="mkhead"><div><b>Rotating Market</b><small>Stronger potions and aura deals than the shop. The stock is the same for everyone and changes every 6 hours.</small></div><div class="mkt"><span>NEW STOCK IN</span><b id="mkTimer">' + fmtLong(Game.marketEndsIn()) + '</b></div></div>';
+    h += '<p class="sub" style="margin:0 0 6px">Potions stack: drink different ones and their luck multiplies. Drink the same one again and you get more time and more of its bonus.</p>';
     h += '<div class="sec">Potions</div>';
     for (const it of stock.filter(x => x.type === 'potion')) {
-      const p = POTION_BY_ID[it.pid], left = it.stock - Game.marketBought(it.id), own = s.potions[p.id] || 0;
-      h += '<div class="row" style="--rc:' + p.color + '"><div class="info"><div class="t" style="color:' + p.color + '">' + esc(p.name) + '</div><div class="d">' + esc(p.desc) + '</div><div class="v">' + (left > 0 ? left + ' left' : 'Sold out') + (own ? ' &middot; you own ' + own : '') + '</div></div>' +
-        '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn gold" data-act="mbuy" data-v="' + it.id + '" data-cost="' + it.price + '"' + (left > 0 && s.coins >= it.price ? '' : ' disabled') + '>' + (left > 0 ? 'BUY<small>' + fmtN(it.price) + '</small>' : 'SOLD OUT') + '</button>' + (own ? '<button class="btn" data-act="usep" data-v="' + p.id + '">USE</button>' : '') + '</div></div>';
+      const p = POTION_BY_ID[it.pid], left = it.stock - Game.marketBought(it.id, w), own = s.potions[p.id] || 0;
+      h += '<div class="row" style="--rc:' + p.color + '"><div class="info"><div class="t" style="color:' + p.color + '">' + esc(p.name) + (it.rare ? ' <span class="rarefind">RARE FIND</span>' : '') + '</div><div class="d">' + esc(p.desc) + '</div><div class="v">' + (left > 0 ? left + ' left' : 'Sold out') + (own ? ' &middot; you own ' + own : '') + '</div></div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn gold" data-act="mbuy" data-v="' + w + '|' + it.id + '" data-cost="' + it.price + '"' + (left > 0 && s.coins >= it.price ? '' : ' disabled') + '>' + (left > 0 ? 'BUY<small>' + fmtN(it.price) + '</small>' : 'SOLD OUT') + '</button>' + (own ? '<button class="btn" data-act="usep" data-v="' + p.id + '">USE</button>' : '') + '</div></div>';
     }
     h += '<div class="sec">Aura deals</div>';
     for (const it of stock.filter(x => x.type === 'aura')) {
-      const i = info(it.key), left = it.stock - Game.marketBought(it.id), own = s.inv[it.key] || 0;
-      h += '<div class="row" style="--rc:' + i.tier.color + '"><div class="info"><div class="t nmx t-' + i.tier.id + '" style="color:' + i.tier.color + '">' + esc(i.name) + '</div><div class="d">' + i.tier.name + ' &middot; ' + fmtOdds(i.eff) + '</div><div class="v">' + (left > 0 ? 'One available' : 'Sold out') + (own ? ' &middot; you own ' + own : '') + '</div></div>' +
-        '<button class="btn gold" data-act="mbuy" data-v="' + it.id + '" data-cost="' + it.price + '"' + (left > 0 && s.coins >= it.price ? '' : ' disabled') + '>' + (left > 0 ? 'BUY<small>' + fmtN(it.price) + '</small>' : 'SOLD OUT') + '</button></div>';
+      const i = info(it.key), left = it.stock - Game.marketBought(it.id, w), own = s.inv[it.key] || 0;
+      h += '<div class="row" style="--rc:' + i.tier.color + '"><div class="info"><div class="t nmx t-' + i.tier.id + '" style="color:' + i.tier.color + '">' + esc(i.name) + '</div><div class="d">' + i.tier.name + ' &middot; ' + fmtOdds(i.eff) + '</div><div class="v">' + (left > 0 ? (it.stock > 1 ? left + ' left' : 'One available') : 'Sold out') + (own ? ' &middot; you own ' + own : '') + '</div></div>' +
+        '<button class="btn gold" data-act="mbuy" data-v="' + w + '|' + it.id + '" data-cost="' + it.price + '"' + (left > 0 && s.coins >= it.price ? '' : ' disabled') + '>' + (left > 0 ? 'BUY<small>' + fmtN(it.price) + '</small>' : 'SOLD OUT') + '</button></div>';
     }
-    this.setPanel('SHOP', this.subTabs('shop', [['shop', 'SHOP'], ['market', 'MARKET']]) + h); $('#panelBody').scrollTop = sc;
+    this.setPanel('SHOP', this.subTabs('shop', [['shop', 'SHOP'], ['quick', 'QUICK'], ['market', 'MARKET']]) + h); $('#panelBody').scrollTop = sc;
   },
   // runs every refresh while the shop is open: re-enable buy buttons, tick the clock, rotate the stock when its time is up
   updateShopButtons() {
     const c = Game.s.coins; document.querySelectorAll('#panelBody [data-cost]').forEach(b => { if (!/SOLD OUT/.test(b.textContent)) b.disabled = c < +b.dataset.cost; });
     if (this.shopTab === 'market') { const el = $('#mkTimer'); if (el) el.textContent = fmtLong(Game.marketEndsIn()); if (this._mkKey !== Game.marketKey()) this.renderMarket(); }
+    else if (this.shopTab === 'quick') { const el = $('#mkTimer'); if (el) el.textContent = fmtClock(Game.quickEndsIn()); if (this._mkKey !== Game.quickKey()) this.renderMarket(); }
   },
 
   // ---------------------------------------------------------------- daily quests

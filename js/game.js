@@ -58,12 +58,13 @@ const Game = {
   adminLuck() { return this.isAdmin() ? Math.max(1, this.s.admin.luck || 1) : 1; },
 
   // ---- multipliers ----
-  potionMult(kind) { let m = 1; for (const p of this.s.active) if (p.kind === kind) m = Math.max(m, p.mult); return m; },
+  // different potions multiply together; drinking the same potion again adds time and another helping of its bonus
+  potionMult(kind) { let m = 1; for (const p of this.s.active) if (p.kind === kind) m *= potionEffect(p); return m; },
   equippedAura() { const k = this.s.equipped; return k ? AURA_BY_ID[k.split(':')[0]] : null; },
   equippedBonus() { const a = this.equippedAura(); return a ? Math.log10(a.odds) * 0.04 * (1 + (VARIANT_BY_ID[this.s.equipped.split(':')[1]].mult > 1 ? .5 : 0)) : 0; },
   luck() { return (1 + this.s.up.luck * 0.06) * this.potionMult('luck') * BIOMES[this.biome].luck * (1 + this.equippedBonus()) * this.adminLuck() * this.eventLuck() * (1 + REBIRTH.luckPer * this.s.rebirths); },
   coinMult() { const a = this.equippedAura(); return (1 + this.s.up.coins * 0.12) * (a ? 1 + Math.log10(a.odds) * 0.05 : 1) * (1 + REBIRTH.coinPer * this.s.rebirths) * this.potionMult('coins'); },
-  cooldownSecs() { return this.isAdmin() && this.s.admin.nocd ? 0 : rollCooldown(this.s.up.speed) / this.potionMult('speed'); },
+  cooldownSecs() { return this.isAdmin() && this.s.admin.nocd ? 0 : Math.max(0.1, rollCooldown(this.s.up.speed) / this.potionMult('speed')); },
 
   // ---- the roll ----
   pickAura(luck, biome) {
@@ -148,8 +149,16 @@ const Game = {
     const p = POTION_BY_ID[id], cur = this.s.active.find(a => a.id === id);
     this.s.potions[id]--;
     if (p.kind === 'beacon') { const pool = ['bloodmoon', 'eclipse', 'glitched', 'rainbow']; this.setBiome(pool[Math.floor(Math.random() * pool.length)]); }
-    else if (cur) cur.left += p.secs; else this.s.active.push({ id, name: p.name, kind: p.kind, mult: p.mult, left: p.secs });
+    else if (cur) { cur.left += p.secs; cur.unit = p.secs; } else this.s.active.push({ id, name: p.name, kind: p.kind, mult: p.mult, left: p.secs, unit: p.secs });
     this.save(); this.emit('potion', id); return true;
+  },
+
+  // timed boost from the owner (own tools or sent to a player). Different strengths stack by multiplying; the same strength adds time.
+  addBoost(mult, secs) {
+    mult = Math.max(1, Math.min(1000, +mult || 1)); secs = Math.max(5, Math.min(30 * 86400, Math.floor(+secs || 60)));
+    const id = 'owner:x' + mult, cur = this.s.active.find(a => a.id === id);
+    if (cur) cur.left += secs; else this.s.active.push({ id, name: 'Owner Boost x' + mult, kind: 'luck', mult, left: secs });
+    this.save(); return secs;
   },
 
   claimDaily() {

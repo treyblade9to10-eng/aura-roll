@@ -92,7 +92,7 @@ const UI = {
     if (Game.biome === 'normal') bb.style.display = 'none';
     else { bb.style.display = 'block'; bb.style.setProperty('--bc', BIOME_COL[Game.biome]); bb.innerHTML = '<span class="bl">' + fmtTime(Game.biomeLeft) + '</span>' + esc(b.name.toUpperCase()) + '<small>x' + b.luck + ' luck</small>'; }
     // potions
-    $('#potions').innerHTML = Live.badge() + s.active.map(p => { const d = POTIONS.find(x => x.id === p.id) || { name: p.name || 'Boost', color: '#ffc83a' }; return '<div class="pot" style="--pc:' + d.color + '">' + esc(d.name) + ' <span>' + fmtTime(p.left) + '</span></div>'; }).join('');
+    $('#potions').innerHTML = Live.badge() + s.active.map(p => { const d = POTION_BY_ID[p.id] || { name: p.name || 'Boost', color: '#ffc83a' }, n = potionStacks(p); return '<div class="pot" style="--pc:' + d.color + '">' + esc(d.name) + (n > 1 ? ' <b>x' + n + '</b>' : '') + ' <span>' + fmtTime(p.left) + '</span></div>'; }).join('');
     if (this.tab === 'shop') this.updateShopButtons();
     $('#tabs [data-tab=bag] .dot')?.remove();
     if (this.badge.bag && this.tab !== 'bag') $('#tabs [data-tab=bag]').insertAdjacentHTML('beforeend', '<i class="dot"></i>');
@@ -321,7 +321,7 @@ const UI = {
 
   // ---- shop ----
   renderShop() {
-    if (this.shopTab === 'market') return this.renderMarket();
+    if (this.shopTab === 'market' || this.shopTab === 'quick') return this.renderMarket();
     const s = Game.s, sc = $('#panelBody').scrollTop;
     const left = DAILY_MS - (Date.now() - (s.daily || 0)), ready = left <= 0;
     let h = '<div class="row" style="--rc:var(--gold)"><div class="info"><div class="t" style="color:var(--gold)">Daily Gift</div><div class="d">A Luck Potion plus coins. Comes back every 20 hours.</div>' + (ready ? '' : '<div class="v">Ready in ' + Math.ceil(left / 3600000) + 'h</div>') + '</div><button class="btn gold" data-act="daily"' + (ready ? '' : ' disabled') + '>CLAIM</button></div><div class="sec">Upgrades</div>';
@@ -337,9 +337,9 @@ const UI = {
         '<div style="display:flex;flex-direction:column;gap:6px"><button class="btn gold" data-act="buyp" data-v="' + p.id + '" data-cost="' + p.cost + '"' + (s.coins < p.cost ? ' disabled' : '') + '>BUY<small>' + fmtN(p.cost) + '</small></button>' +
         '<button class="btn" data-act="usep" data-v="' + p.id + '"' + (own ? '' : ' disabled') + '>USE</button></div></div>';
     }
-    const ownM = MARKET_POTIONS.filter(p => (s.potions[p.id] || 0) > 0);
+    const ownM = MARKET_POTIONS.concat(QUICK_POTIONS).filter(p => (s.potions[p.id] || 0) > 0);
     if (ownM.length) { h += '<div class="sec">Market potions you own</div>' + ownM.map(p => '<div class="row" style="--rc:' + p.color + '"><div class="info"><div class="t" style="color:' + p.color + '">' + p.name + '</div><div class="d">' + p.desc + '</div><div class="v">Owned: ' + s.potions[p.id] + '</div></div><button class="btn" data-act="usep" data-v="' + p.id + '">USE</button></div>').join(''); }
-    this.setPanel('SHOP', this.subTabs('shop', [['shop', 'SHOP'], ['market', 'MARKET']]) + h); $('#panelBody').scrollTop = sc;
+    this.setPanel('SHOP', this.subTabs('shop', [['shop', 'SHOP'], ['quick', 'QUICK'], ['market', 'MARKET']]) + h); $('#panelBody').scrollTop = sc;
   },
   updateShopButtons() { const c = Game.s.coins; document.querySelectorAll('#panelBody [data-cost]').forEach(b => b.disabled = c < +b.dataset.cost); },
 

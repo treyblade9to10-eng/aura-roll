@@ -6,6 +6,9 @@ const Admin = {
   tab: 'me', sel: null,
   coinSteps: [['+1K', 1e3], ['+1M', 1e6], ['+1B', 1e9], ['+1T', 1e12], ['+1Qa', 1e15]],
   luckSteps: [1, 5, 25, 100, 1000, 1000000],
+  boostSteps: [2, 5, 10, 25, 50, 100, 500, 1000],
+  durSteps: [[30, '30s'], [60, '1m'], [300, '5m'], [600, '10m'], [1800, '30m'], [3600, '1h'], [21600, '6h'], [86400, '24h']],
+  dur: 600,
 
   // ---------- helpers ----------
   auraSelect(id) { return '<select id="' + id + '" class="search">' + AURAS.slice().sort((x, y) => x.odds - y.odds).map(x => '<option value="' + x.id + '">' + esc(x.name) + ' (' + fmtOdds(x.odds) + ')</option>').join('') + '</select>'; },
@@ -14,6 +17,12 @@ const Admin = {
   chips(act, vals, cur, fmt) { return '<div class="chips">' + vals.map(v => '<button class="chip' + (cur === v ? ' on' : '') + '" data-ad="' + act + '" data-v="' + v + '">' + (fmt ? fmt(v) : v) + '</button>').join('') + '</div>'; },
   ago(t) { if (!t) return 'never'; const s = Math.max(0, (Date.now() - t) / 1000); return s < 90 ? 'just now' : s < 3600 ? Math.round(s / 60) + 'm ago' : s < 86400 ? Math.round(s / 3600) + 'h ago' : Math.round(s / 86400) + 'd ago'; },
   online(p) { return p && p.on && Date.now() - (p.at || 0) < 150000; },
+  // how long a luck boost / party lasts: tap a length, or type your own number of minutes
+  durPicker() {
+    return '<div class="asec">How long</div><div class="chips">' + this.durSteps.map(d => '<button class="chip' + (this.dur === d[0] ? ' on' : '') + '" data-ad="dur" data-v="' + d[0] + '">' + d[1] + '</button>').join('') + '</div>' +
+      '<div class="arow"><input class="search" id="adDur" inputmode="decimal" placeholder="or type minutes (like 45)" style="margin:0"></div>';
+  },
+  getDur() { const m = parseFloat(String(this.val('adDur')).replace(',', '.')); return m > 0 ? Math.min(Math.round(m * 60), 7 * 86400) : this.dur; },
   val(id) { const e = $('#' + id); return e ? e.value : ''; },
 
   // ---------- frame ----------
@@ -24,6 +33,7 @@ const Admin = {
     UI.openDialog('Admin Panel', '<div class="atabs">' + T.map(t => '<button class="' + (this.tab === t[0] ? 'on' : '') + '" data-ad="tab" data-v="' + t[0] + '">' + t[1] + '</button>').join('') + '</div><div id="atab"></div>', false);
     $('#mbox').classList.add('admin');
     $('#mbox').onclick = e => { const t = e.target.closest('[data-ad]'); if (t) this.act(t.dataset.ad, t.dataset.v); };
+    $('#mbox').oninput = e => { if (e.target.id === 'adDur') document.querySelectorAll('[data-ad=dur]').forEach(b => b.classList.toggle('on', !e.target.value.trim() && +b.dataset.v === this.dur)); };
     this.paint();
   },
   paint() {
@@ -33,7 +43,7 @@ const Admin = {
   // keep the lists fresh while the panel is open (players and feed arrive live)
   liveUpdate() {
     if (this.tab === 'players' && !this.sel && $('#plist')) $('#plist').innerHTML = this.rowsHtml();
-    else if (this.tab === 'live' && $('#afeed')) { if ((Live.luckMult() > 1) !== this._party) this.paint(); else $('#afeed').innerHTML = this.feedHtml(); }
+    else if (this.tab === 'live' && $('#afeed')) { if (Live.luckMult() !== this._pm) this.paint(); else { $('#afeed').innerHTML = this.feedHtml(); document.querySelectorAll('.ptm').forEach(e => { e.textContent = fmtTime((+e.dataset.u - Date.now()) / 1000); }); } }
   },
 
   // ---------- ME ----------
@@ -42,7 +52,9 @@ const Admin = {
     return '<p class="sub">Your own account. Only you can see this.</p>' +
       '<div class="asec">Coins</div><div class="chips">' + this.coinSteps.map(c => '<button class="chip on" data-ad="coins" data-v="' + c[1] + '" style="--tc:var(--gold)">' + c[0] + '</button>').join('') + '</div>' +
       '<div class="arow"><input class="search" id="adCoins" inputmode="numeric" placeholder="Any amount" style="margin:0"><button class="btn gold" data-ad="coinsCustom">ADD</button></div>' +
-      '<div class="asec">Luck boost</div>' + this.chips('luck', this.luckSteps, a.luck, v => 'x' + v.toLocaleString()) +
+      '<div class="asec">Timed luck (stacks)</div><div class="sub" style="margin:-4px 0 6px">Tap a strength to start it. Different strengths multiply together; the same strength adds more time.' + this.myBoosts() + '</div>' +
+      this.chips('tluck', this.boostSteps, 0, v => 'x' + v.toLocaleString()) + this.durPicker() +
+      '<div class="asec">Permanent luck (always on)</div>' + this.chips('luck', this.luckSteps, a.luck, v => 'x' + v.toLocaleString()) +
       '<div class="arow"><span>No roll cooldown</span><button class="btn' + (a.nocd ? '' : ' ghost') + '" data-ad="nocd">' + (a.nocd ? 'ON' : 'OFF') + '</button></div>' +
       '<div class="asec">Aura</div>' + this.auraSelect('adAura') + this.varSelect('adVar') +
       '<div class="arow"><button class="btn" data-ad="forceRoll" style="flex:1">ROLL IT<small>with the full reveal</small></button><button class="btn gold" data-ad="give" style="flex:1">ADD TO BAG<small>instantly</small></button></div>' +
@@ -50,9 +62,14 @@ const Admin = {
       '<div class="asec">World</div><div class="arow">' + this.biomeSelect('adBiome', Game.biome) + '<button class="btn" data-ad="biome">SET BIOME</button></div>' +
       '<div class="asec">Quick unlocks</div><div class="arow"><button class="btn" data-ad="potions" style="flex:1">5 OF EACH POTION</button><button class="btn" data-ad="shop" style="flex:1">AUTO + FAST</button></div>' +
       '<div class="arow"><button class="btn" data-ad="all" style="flex:1">UNLOCK EVERY AURA<small>one of each</small></button></div>' +
-      '<div class="asec">Test the new systems</div><div class="arow"><button class="btn" data-ad="mkroll" style="flex:1">NEW MARKET STOCK</button><button class="btn" data-ad="qreset" style="flex:1">NEW QUESTS</button></div>' +
+      '<div class="asec">Test the new systems</div><div class="arow"><button class="btn" data-ad="mkroll" style="flex:1">NEW MARKET + QUICK STOCK</button><button class="btn" data-ad="qreset" style="flex:1">NEW QUESTS</button></div>' +
       '<div class="arow"><button class="btn red" data-ad="rbnow" style="flex:1">REBIRTH NOW<small>ignores the requirement</small></button></div>' +
       '<div class="acts"><button class="btn ghost" data-ad="close">CLOSE</button></div>';
+  },
+
+  myBoosts() {
+    const l = Game.s.active.filter(p => p.id.indexOf('owner:') === 0);
+    return l.length ? '<br><b>Running:</b> ' + l.map(p => 'x' + p.mult + ' (' + fmtTime(p.left) + ')').join(', ') + ' <button class="btn ghost" data-ad="tclear" style="min-width:0;padding:2px 10px;margin-left:6px">CLEAR</button>' : '';
   },
 
   // ---------- PLAYERS ----------
@@ -78,19 +95,21 @@ const Admin = {
       '<div class="asec">Aura</div>' + this.auraSelect('pAura') + this.varSelect('pVar') +
       '<div class="arow"><button class="btn gold" data-ad="pgive" style="flex:1">GIVE</button><button class="btn red" data-ad="ptake" style="flex:1">TAKE</button></div>' +
       '<div class="arow"><button class="btn" data-ad="pforce" style="flex:1">FORCE NEXT ROLL</button><button class="btn" data-ad="pcine" style="flex:1">SHOW CUTSCENE</button></div>' +
-      '<div class="asec">Luck boost</div>' + this.chips('pluck', [2, 5, 10, 50], 0, v => 'x' + v) +
-      '<div class="sub" style="margin:-4px 0 8px">Tap a number to send it for 10 minutes.</div>' +
+      '<div class="asec">Luck boost (stacks on theirs)</div>' + this.chips('pluck', this.boostSteps, 0, v => 'x' + v) +
+      '<div class="sub" style="margin:-4px 0 0">Tap a number to send it for the time below.</div>' + this.durPicker() +
       '<div class="asec">Weather</div><div class="arow">' + this.biomeSelect('pBiome', 'night') + '<button class="btn" data-ad="pbiome">SET</button></div>' +
       '<div class="asec">Message</div><div class="arow"><input class="search" id="pMsg" maxlength="160" placeholder="Say something to them" style="margin:0"><button class="btn" data-ad="pmsg">SEND</button></div>';
   },
 
   // ---------- LIVE ----------
   liveHtml() {
-    const ev = Live.event, on = this._party = Live.luckMult() > 1, online = Object.values(Live.players).filter(p => this.online(p)).length;
+    const on = this._party = Live.luckMult() > 1; this._pm = Live.luckMult(); const online = Object.values(Live.players).filter(p => this.online(p)).length;
+    const parties = Live.parties();
     return '<p class="sub">Things that happen to everyone playing right now. ' + (Live.playersErr ? '' : '<b>' + online + '</b> online.') + '</p>' +
-      '<div class="asec">Luck party' + (on ? ' - running x' + Live.luckMult() + ', ' + fmtTime((ev.until - Date.now()) / 1000) + ' left' : '') + '</div>' +
-      this.chips('lparty', [2, 5, 10, 25], 0, v => 'x' + v) + '<div class="sub" style="margin:-4px 0 8px">Tap a number to start it for 10 minutes.</div>' +
-      (on ? '<div class="arow"><button class="btn red" data-ad="lend" style="flex:1">END LUCK PARTY</button></div>' : '') +
+      '<div class="asec">Luck party' + (on ? ' - running x' + Live.luckMult().toLocaleString() + ' in total' : '') + '</div>' +
+      (on ? '<div class="sub" style="margin:0 0 6px">' + parties.map(p => 'x' + p.m + ' (<span class="ptm" data-u="' + p.u + '">' + fmtTime((p.u - Date.now()) / 1000) + '</span>)').join(' &times; ') + '</div>' : '') +
+      this.chips('lparty', this.boostSteps, 0, v => 'x' + v) + '<div class="sub" style="margin:-4px 0 0">Tap a number to start a party for the time below. Parties stack: a new one multiplies with the ones already running.</div>' + this.durPicker() +
+      (on ? '<div class="arow"><button class="btn red" data-ad="lend" style="flex:1">END ALL LUCK PARTIES</button></div>' : '') +
       '<div class="asec">Coin rain</div><div class="arow"><input class="search" id="lCoins" inputmode="numeric" placeholder="Coins for everyone" style="margin:0"><button class="btn gold" data-ad="lcoins">SEND</button></div>' +
       '<div class="asec">Weather for everyone</div><div class="arow">' + this.biomeSelect('lBiome', 'night') + '<button class="btn" data-ad="lbiome">SET</button></div>' +
       '<div class="asec">Announcement</div><div class="arow"><input class="search" id="lMsg" maxlength="160" placeholder="Message for everyone" style="margin:0"><button class="btn" data-ad="lmsg">SEND</button></div>' +
@@ -118,6 +137,7 @@ const Admin = {
     if (k === 'tab') { this.tab = v; this.sel = null; return this.open(); }
     if (k === 'pick') { this.sel = v; return this.paint(); }
     if (k === 'back') { this.sel = null; return this.paint(); }
+    if (k === 'dur') { this.dur = +v; const i = $('#adDur'); if (i) i.value = ''; document.querySelectorAll('[data-ad=dur]').forEach(b => b.classList.toggle('on', +b.dataset.v === this.dur)); return; }
     // other players
     if (k === 'pcoins') return this.send({ type: 'coins', n: +v }, '+' + fmtN(+v) + ' coins');
     if (k === 'pcoinsAdd' || k === 'pcoinsTake') { const n = this.amount('pCoins'); if (!n) return Sound.deny(); return this.send({ type: 'coins', n: k === 'pcoinsAdd' ? n : -n }, (k === 'pcoinsAdd' ? '+' : '-') + fmtN(n) + ' coins'); }
@@ -126,14 +146,15 @@ const Admin = {
       if (k === 'pgive') return this.send({ type: 'give', key, n: 1 }, nm);
       if (k === 'ptake') return this.send({ type: 'take', key, n: 1 }, 'take ' + nm);
       if (k === 'pforce') return this.send({ type: 'force', id, variant: vid }, 'next roll = ' + nm);
-      return this.send({ type: 'cine', aura: id, variant: vid }, 'cutscene ' + nm);
+      this.send({ type: 'cine', aura: id, variant: vid }, 'cutscene ' + nm);
+      const aura = AURA_BY_ID[id], vv = VARIANT_BY_ID[vid]; return UI.replayCine(id + ':' + vid, { aura, variant: vv, key: id + ':' + vid, eff: aura.odds * vv.chance, isNew: false });   // you get to watch it too
     }
-    if (k === 'pluck') return this.send({ type: 'luck', mult: +v, secs: 600 }, 'x' + v + ' luck for 10 min');
+    if (k === 'pluck') { const d = this.getDur(); return this.send({ type: 'luck', mult: +v, secs: d }, 'x' + v + ' luck for ' + Live.durText(d)); }
     if (k === 'pbiome') return this.send({ type: 'biome', id: this.val('pBiome') }, BIOMES[this.val('pBiome')].name + ' weather');
     if (k === 'pmsg') { const t = this.val('pMsg').trim(); if (!t) return Sound.deny(); this.send({ type: 'msg', text: t }, 'message'); $('#pMsg').value = ''; return; }
     // everyone
-    if (k === 'lparty') { Live.luckParty(+v, 10).then(() => { this.sent('x' + v + ' luck party for 10 min'); this.paint(); }).catch(e => this.fail(e)); return; }
-    if (k === 'lend') { Live.endLuck().then(() => { this.sent('luck party ended'); this.paint(); }).catch(e => this.fail(e)); return; }
+    if (k === 'lparty') { const d = this.getDur(); Live.luckParty(+v, d).then(() => { this.sent('x' + v + ' luck party for ' + Live.durText(d)); this.paint(); }).catch(e => this.fail(e)); return; }
+    if (k === 'lend') { Live.endLuck().then(() => { this.sent('all luck parties ended'); this.paint(); }).catch(e => this.fail(e)); return; }
     if (k === 'lcoins') { const n = this.amount('lCoins'); if (!n) return Sound.deny(); return this.pulse({ kind: 'coins', n }, fmtN(n) + ' coins for everyone'); }
     if (k === 'lbiome') return this.pulse({ kind: 'biome', id2: this.val('lBiome') }, BIOMES[this.val('lBiome')].name + ' for everyone');
     if (k === 'lmsg') { const t = this.val('lMsg').trim(); if (!t) return Sound.deny(); this.pulse({ kind: 'msg', text: t }, 'announcement'); $('#lMsg').value = ''; return; }
@@ -142,6 +163,8 @@ const Admin = {
     // my own account
     if (k === 'coins') { Game.adminCoins(+v); Sound.coin(); UI.toast('+' + fmtN(+v) + ' coins', '', '#ffc83a'); }
     else if (k === 'coinsCustom') { const n = this.amount('adCoins'); if (n) { Game.adminCoins(n); Sound.coin(); UI.toast('+' + fmtN(n) + ' coins', '', '#ffc83a'); } else Sound.deny(); }
+    else if (k === 'tluck') { const d = this.getDur(); Game.addBoost(+v, d); a.used = true; Sound.buy(); UI.toast('x' + v + ' luck for ' + Live.durText(d), 'Stacks with your other boosts', '#4de28a'); this.paint(); }
+    else if (k === 'tclear') { s.active = s.active.filter(p => p.id.indexOf('owner:') !== 0); Game.save(); this.paint(); }
     else if (k === 'luck') { a.luck = +v; a.used = true; Game.save(); this.paint(); }
     else if (k === 'nocd') { a.nocd = !a.nocd; a.used = true; Game.cooldown = 0; Game.save(); this.paint(); }
     else if (k === 'give') { const key = this.val('adAura') + ':' + this.val('adVar'); Game.adminGive(key, 1); Sound.buy(); UI.toast('Added to your bag', info(key).name, info(key).tier.color); if (UI.tab === 'bag') UI.renderBag(); if (UI.tab === 'index') UI.renderIndex(); UI.refreshEquipped(); }
