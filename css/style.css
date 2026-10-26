@@ -364,3 +364,20 @@ a.btn { display: block; text-decoration: none; line-height: 1.3; }
   .stat { font-size: 15px; padding: 4px 6px; } .stat.cloud { font-size: 11px; padding: 4px 6px; }
   .brand { font-size: 21px; } .ownertag { font-size: 10px; } .rbtag { font-size: 11px; }
 }
+
+/* v1.5.2: phones sideways. Everything at the top stays on the game side of the panel, badges wrap compactly, notch safe areas respected. */
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
+  #hud { padding-left: max(10px, env(safe-area-inset-left)); padding-right: max(10px, env(safe-area-inset-right)); }
+  #status { left: max(10px, env(safe-area-inset-left)); right: 10px; gap: 4px; }
+  #biomeBadge { padding: 3px 10px 3px 9px; max-width: 100%; box-sizing: border-box; } #biomeBadge small { display: inline; margin-left: 6px; font-size: 11px; }
+  #potions { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; }
+  .pot { font-size: 12px; padding: 2px 8px 2px 7px; gap: 5px; border-left-width: 3px; white-space: nowrap; max-width: 100%; box-sizing: border-box; }
+  #app.open #hud { flex-wrap: wrap; gap: 4px; padding-right: 10px; }
+  #app.open .brand { width: 100%; white-space: nowrap; }
+  #app.open .stats { width: 100%; gap: 5px; }
+  #app.open .stat { flex: 1 1 0; min-width: 0; justify-content: center; gap: 5px; } #app.open .stat.cloud { flex: 0 0 auto; }
+  #app.open .stat b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #app.open #status { top: 64px; right: calc(var(--pw) + 10px); }
+  #app.open #tabs { width: calc(100% - var(--pw) - 16px); max-width: 420px; }
+  #app.open #toasts { right: calc(var(--pw) + 8px); left: auto; top: 100px; }
+}

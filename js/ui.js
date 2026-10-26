@@ -360,7 +360,7 @@ const UI = {
       sync: 'Checking your cloud save...', saving: 'Saving...', saved: 'Saved online' + (Cloud.savedAt ? ' at ' + new Date(Cloud.savedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '') + '. It keeps saving by itself.',
       denied: 'Cloud saving is not switched on yet. Your game still saves on this device.', error: 'Could not save: ' + esc(Cloud.error) }[st];
     let h = '<div class="sec" style="margin-top:0">Account</div><div class="acct ' + st + '"><div class="who">' + (u ? who : 'Not signed in') + '</div><p class="sub" style="margin:4px 0 10px">' + line + '</p>' + (u ? '<p class="sub" style="margin:-4px 0 10px;font-size:12px">The game owner can see your name and progress, and can send you gifts and messages.</p>' : '');
-    h += u ? '<div style="display:flex;gap:8px"><button class="btn" data-act="savenow" style="flex:1">SAVE NOW</button><button class="btn ghost" data-act="loadcloud" style="flex:1">LOAD CLOUD</button><button class="btn ghost" data-act="signout" style="flex:0 0 auto;min-width:0">SIGN OUT</button></div>'
+    h += u ? '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="savenow" style="flex:1 1 110px">SAVE NOW</button><button class="btn ghost" data-act="loadcloud" style="flex:1 1 110px">LOAD CLOUD</button><button class="btn ghost" data-act="signout" style="flex:0 0 auto;min-width:0">SIGN OUT</button></div>'
       : '<button class="btn gold" data-act="signin" style="width:100%"' + (st === 'off' ? ' disabled' : '') + '>SIGN IN WITH GOOGLE</button>';
     return h + '</div>';
   },
